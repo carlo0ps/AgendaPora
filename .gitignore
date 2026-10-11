@@ -1,0 +1,17 @@
+# Credenciales privadas y archivos locales
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.log
+
+# Herramientas y sistema operativo
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.history/
+node_modules/
+coverage/
+dist/
