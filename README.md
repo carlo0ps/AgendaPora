@@ -1,6 +1,6 @@
 # AgendaPorã
 
-CRM, agenda y reservas para peluquerías y salones de belleza. Interfaz en español de Paraguay, moneda en guaraníes, instalada como PWA y alojada como archivos estáticos. Cada salón es una cuenta Supabase Auth y el aislamiento se aplica en PostgreSQL con RLS.
+CRM, agenda y reservas para peluquerías y salones de belleza. Interfaz en español de Paraguay, moneda en guaraníes y disponible desde navegadores móviles y de escritorio como archivos estáticos. Cada salón es una cuenta Supabase Auth y el aislamiento se aplica en PostgreSQL con RLS.
 
 ## Instalación paso a paso
 
@@ -134,7 +134,7 @@ En el plan gratuito, Supabase puede pausar proyectos con poca actividad de base 
 - Las visitas de fidelización cuentan turnos marcados como hechos. El premio se informa cada múltiplo de la meta configurada.
 - Los horarios públicos usan bloques de 15 minutos, respetan duración de servicio y excluyen turnos y solicitudes pendientes que se solapan. Se ofrecen fechas hasta 90 días adelante y se evalúan en `America/Asuncion`.
 - Las fotos son privadas y se muestran mediante URL firmadas con expiración de 30 minutos; los logos son públicos para que aparezcan en reservas.
-- El service worker solo guarda el shell estático. Supabase Auth, RPC, REST y Storage no se guardan en caché; trabajar con datos privados requiere conexión.
+- Al abrir index.html, admin.html o reservar.html, la aplicación elimina registros de workers y cachés antiguos del navegador. Los datos privados siempre requieren conexión con Supabase.
 - Los recordatorios abren WhatsApp sin API. La usuaria marca el envío manualmente porque el navegador no puede confirmar si el mensaje se envió desde WhatsApp.
 - GitHub Pages sirve la aplicación; Supabase sigue siendo el backend. No se guarda una service-role key en el repositorio.
 

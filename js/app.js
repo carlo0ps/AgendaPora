@@ -77,7 +77,6 @@ const state = {
   agendaDate: dateInput(),
   agendaMode: 'dia',
   reportMode: 'mes',
-  installPrompt: null,
   detailsClient: null,
   onboardingStep: 0,
   passwordRecoverySession: null,
@@ -85,7 +84,6 @@ const state = {
 };
 let supabase;
 let appSessionUserId = null;
-let serviceWorkerReloading = false;
 let pendingAuthUserId = null;
 let profileReadQueue = Promise.resolve();
 let passwordRecoveryActive = new URLSearchParams(location.hash.slice(1)).get('type') === 'recovery';
@@ -191,7 +189,7 @@ function navMarkup(mobile = false) {
     const selected = id === 'configuracion' ? !['inicio', 'clientas', 'agenda', 'solicitudes'].includes(state.view) : state.view === id;
     return `<a class="nav-link ${selected?'active':''}" href="#${id}" data-nav="${id}" ${selected?'aria-current="page"':''}><span class="nav-icon" aria-hidden="true">${icon}</span><span>${e(label)}</span></a>`;
   }).join('');
-  return mobile ? `${links}<button class="nav-link install-nav-button" type="button" data-install-app><span class="nav-icon" aria-hidden="true">⇩</span><span>Instalar</span></button>` : links;
+  return links;
 }
 
 function renderNav() {
@@ -199,7 +197,6 @@ function renderNav() {
   $('#bottom-nav').innerHTML = navMarkup(true);
   $('#mobile-menu-nav').innerHTML = navMarkup();
   $('#mobile-public-booking-link').href = bookingURL();
-  updateInstallVisibility();
 }
 
 function setBrand() {
@@ -215,44 +212,6 @@ function setBrand() {
 function setTheme(theme) {
   applyTheme(theme);
   localStorage.setItem('agendapora-theme', theme);
-}
-
-function appInstalled() {
-  return window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
-}
-
-function updateInstallVisibility() {
-  $$('[data-install-app]').forEach(button => button.classList.toggle('hidden', appInstalled()));
-}
-
-function installGuide() {
-  const ua = navigator.userAgent || '';
-  const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const isAndroidChrome = /Android/i.test(ua) && /Chrome/i.test(ua) && !/EdgA|OPR/i.test(ua);
-  const isDesktopChromium = !/Android|iPhone|iPad|iPod/i.test(ua) && /Chrome|Edg/i.test(ua);
-  const guide = isIOS
-    ? 'iPhone/Safari: Compartir → Agregar a inicio.'
-    : isAndroidChrome
-      ? 'Android/Chrome: Menú ⋮ → Instalar app / Agregar a pantalla de inicio.'
-      : isDesktopChromium
-        ? 'Escritorio Chrome/Edge: Ícono de instalar en la barra de direcciones.'
-        : 'Abrí el menú del navegador y elegí “Agregar a pantalla de inicio” o “Instalar app”.';
-  return location.protocol === 'https:' ? guide : `La instalación requiere HTTPS (se habilita al publicar la app). ${guide}`;
-}
-
-async function installApp() {
-  if (appInstalled()) return updateInstallVisibility();
-  if (!state.installPrompt) return toast(installGuide(), 'info');
-  const promptEvent = state.installPrompt;
-  state.installPrompt = null;
-  try {
-    await promptEvent.prompt();
-    const choice = await promptEvent.userChoice;
-    if (choice?.outcome === 'accepted') toast('AgendaPorã se está instalando.', 'success');
-  } catch (error) {
-    toast(requestError(error), 'error');
-  }
-  updateInstallVisibility();
 }
 
 function setSubscription() {
@@ -473,7 +432,6 @@ function applyView() {
   $('#view-root').innerHTML = renderers[state.view]();
   bindView();
   applyReadOnlyControls();
-  updateInstallVisibility();
 }
 
 function renderHome() {
@@ -646,7 +604,7 @@ function renderSettings() {
       defaultText
     }));
   const moreLinks = NAV.filter(([id]) => !['inicio','clientas','agenda','solicitudes','configuracion'].includes(id)).map(([id, icon, label]) => `<a class="button ghost" href="#${id}">${icon} ${e(label)}</a>`).join('');
-  return `${heading('Perfil del salón','Configuración')}<section class="panel"><div class="panel-head"><h2>Más herramientas</h2></div><div class="toolbar">${moreLinks}<button class="button soft" type="button" data-install-app>Instalar app</button></div></section><div class="content-grid"><form id="profile-form" class="panel form-grid"><label class="field wide">Nombre del salón<input name="nombre" maxlength="100" required value="${e(p.nombre||'')}"></label><label class="field">Slug de reservas<input value="${e(p.slug||'')}" disabled><small class="muted">Tu enlace público incluye este identificador.</small></label><label class="field">Teléfono del salón<input name="telefono" type="tel" maxlength="24" value="${e(p.telefono||'')}"></label><label class="field wide">Dirección<input name="direccion" maxlength="180" value="${e(p.direccion||'')}"></label><label class="field">Color principal<input name="color_principal" type="color" value="${e(validColor(p.color_principal)?p.color_principal:getComputedStyle(document.body).getPropertyValue('--primary-fill').trim())}"></label><label class="field">Visitas para premio<input name="visitas_premio" type="number" min="2" max="100" value="${Number(p.visitas_premio||10)}"></label><label class="field">Premio de fidelidad<input name="premio_descripcion" maxlength="100" value="${e(p.premio_descripcion||'Servicio o descuento especial')}"></label><label class="field">Link WhatsApp renovación<input name="telefono_soporte" type="tel" maxlength="24" value="${e(p.telefono_soporte||'')}"></label><label class="field wide">Horario de atención<input name="horario_texto" maxlength="180" placeholder="Lun a sáb · 08:00 a 18:00" value="${e(p.horario_texto||'')}"></label><label class="field wide">Horario semanal para reservas (JSON)<textarea name="horarios_json" rows="5">${e(JSON.stringify(p.horarios||defaultHours(),null,2))}</textarea><small class="muted">Usá formato 24 h y días 0 domingo… 6 sábado. Ej.: {"1":{"inicio":"08:00","fin":"18:00"}}.</small></label><label class="field wide">Logo del salón<input type="file" name="logo" accept="image/png,image/jpeg,image/webp"></label><div class="field wide"><button class="button primary" type="submit">Guardar perfil</button></div></form>
+  return `${heading('Perfil del salón','Configuración')}<section class="panel"><div class="panel-head"><h2>Más herramientas</h2></div><div class="toolbar">${moreLinks}</div></section><div class="content-grid"><form id="profile-form" class="panel form-grid"><label class="field wide">Nombre del salón<input name="nombre" maxlength="100" required value="${e(p.nombre||'')}"></label><label class="field">Slug de reservas<input value="${e(p.slug||'')}" disabled><small class="muted">Tu enlace público incluye este identificador.</small></label><label class="field">Teléfono del salón<input name="telefono" type="tel" maxlength="24" value="${e(p.telefono||'')}"></label><label class="field wide">Dirección<input name="direccion" maxlength="180" value="${e(p.direccion||'')}"></label><label class="field">Color principal<input name="color_principal" type="color" value="${e(validColor(p.color_principal)?p.color_principal:getComputedStyle(document.body).getPropertyValue('--primary-fill').trim())}"></label><label class="field">Visitas para premio<input name="visitas_premio" type="number" min="2" max="100" value="${Number(p.visitas_premio||10)}"></label><label class="field">Premio de fidelidad<input name="premio_descripcion" maxlength="100" value="${e(p.premio_descripcion||'Servicio o descuento especial')}"></label><label class="field">Link WhatsApp renovación<input name="telefono_soporte" type="tel" maxlength="24" value="${e(p.telefono_soporte||'')}"></label><label class="field wide">Horario de atención<input name="horario_texto" maxlength="180" placeholder="Lun a sáb · 08:00 a 18:00" value="${e(p.horario_texto||'')}"></label><label class="field wide">Horario semanal para reservas (JSON)<textarea name="horarios_json" rows="5">${e(JSON.stringify(p.horarios||defaultHours(),null,2))}</textarea><small class="muted">Usá formato 24 h y días 0 domingo… 6 sábado. Ej.: {"1":{"inicio":"08:00","fin":"18:00"}}.</small></label><label class="field wide">Logo del salón<input type="file" name="logo" accept="image/png,image/jpeg,image/webp"></label><div class="field wide"><button class="button primary" type="submit">Guardar perfil</button></div></form>
     <div class="page-stack"><section class="panel"><h2>Reservas públicas</h2><p class="muted tiny">Compartí el enlace para que tus clientas soliciten horario.</p><input class="input" readonly value="${e(bookingURL())}"><div class="toolbar"><button class="button soft" data-action="share-booking">Copiar link</button><button class="button ghost" data-action="whatsapp-booking">Compartir por WhatsApp</button></div></section><section class="panel"><h2>Fidelización</h2><p class="muted">Cada ${Number(p.visitas_premio||10)} visitas: ${e(p.premio_descripcion||'un premio especial')}.</p></section><section class="panel"><h2>Respaldo y datos</h2><p class="muted tiny">El respaldo contiene la información del salón que puede leer tu cuenta.</p><div class="toolbar"><button class="button soft" data-action="backup-json">Descargar JSON</button><button class="button ghost" data-action="backup-csv">Descargar CSV</button></div></section><section class="panel"><h2>Mensajes de WhatsApp</h2><p class="muted tiny">Editá las plantillas. Variables: {nombre}, {fecha}, {hora}, {deuda}, {salon}.</p>${templates.map(t=>`<label class="field">${e(t.label)}<textarea class="template-input" data-template="${e(t.key)}" rows="3">${e(t.row?.contenido||t.defaultText)}</textarea></label>`).join('')}<button class="button primary" data-action="save-templates">Guardar mensajes</button></section><section class="panel"><h2>Cambiar contraseña</h2><p class="muted tiny">Usá una contraseña nueva de al menos ocho caracteres.</p><form id="logged-password-form" class="password-settings-form"><label class="field">Nueva contraseña<input name="password" type="password" autocomplete="new-password" minlength="8" required></label><label class="field">Confirmar contraseña<input name="password_confirm" type="password" autocomplete="new-password" minlength="8" required></label><button class="button primary password-save" type="submit">Guardar contraseña</button><p id="logged-password-message" class="password-settings-message form-error" role="status" aria-live="polite"></p></form></section><section class="panel"><h2>Modo de pantalla</h2><p class="muted">Se guarda en este dispositivo.</p><button class="button ghost" data-action="toggle-theme">Cambiar tema</button></section></div></div>`;
 }
 
@@ -1853,7 +1811,7 @@ async function init() {
     }
   });
   $('#mobile-menu-dialog').addEventListener('click', ev => {
-    if (ev.target === ev.currentTarget || ev.target.closest('[data-mobile-menu-close],[data-nav],[data-install-app],#mobile-public-booking-link,#mobile-theme-toggle,#mobile-logout-button')) ev.currentTarget.close();
+    if (ev.target === ev.currentTarget || ev.target.closest('[data-mobile-menu-close],[data-nav],#mobile-public-booking-link,#mobile-theme-toggle,#mobile-logout-button')) ev.currentTarget.close();
   });
   $('#mobile-menu-dialog').addEventListener('close', () => $('#mobile-menu').setAttribute('aria-expanded', 'false'));
   window.addEventListener('hashchange', handleAppNavigation);
@@ -1872,41 +1830,8 @@ async function init() {
     });
   });
   document.addEventListener('click', ev => {
-    const installButton = ev.target.closest('[data-install-app]');
-    if (installButton) {
-      ev.preventDefault();
-      installApp();
-      return;
-    }
     if (ev.target.closest('[data-modal-close]')) ev.target.closest('dialog')?.close();
   });
-  window.addEventListener('beforeinstallprompt', ev => {
-    ev.preventDefault();
-    state.installPrompt = ev;
-  });
-  window.addEventListener('appinstalled', () => {
-    state.installPrompt = null;
-    updateInstallVisibility();
-  });
-  updateInstallVisibility();
-  window.matchMedia?.('(display-mode: standalone)').addEventListener?.('change', updateInstallVisibility);
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (serviceWorkerReloading) return;
-      serviceWorkerReloading = true;
-      const reloadKey = 'agendapora-sw-reload-pending';
-      if (sessionStorage.getItem(reloadKey) === '1') {
-        sessionStorage.removeItem(reloadKey);
-        return;
-      }
-      sessionStorage.setItem(reloadKey, '1');
-      location.reload();
-    });
-    if (sessionStorage.getItem('agendapora-sw-reload-pending') === '1') {
-      sessionStorage.removeItem('agendapora-sw-reload-pending');
-    }
-    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(() => {});
-  }
   try {
     readyClient();
     supabase.auth.onAuthStateChange((event, session) => {

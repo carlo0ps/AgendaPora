@@ -246,6 +246,6 @@ function init() {
       }
     });
   } catch {
-    /* Configuración completada en js/config.js al instalar. */ }
+    /* Configuración requerida en js/config.js. */ }
 }
 init();
