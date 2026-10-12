@@ -416,12 +416,14 @@ function empty(title, body, icon = '♡') {
 }
 
 function table(headers, rows) {
-  if (!rows.length) return empty('Todavía está vacío', 'Cuando agregues información, aparecerá acá.', '✦');
+  const isPaginated = Array.isArray(rows);
+  const rowMarkup = isPaginated ? rows.join('') : typeof rows === 'string' ? rows : '';
+  if (!rowMarkup) return empty('Todavía está vacío', 'Cuando agregues información, aparecerá acá.', '✦');
   const id = ++tableRenderIndex;
-  tablePageData.set(id, { rows, page: 0 });
-  return `<section class="table-component"><div class="table-wrap" tabindex="0" role="region" aria-label="Tabla desplazable"><table><thead><tr>${headers.map(h=>`<th>${e(h)}</th>`).join('')}</tr></thead><tbody id="table-page-body-${id}">${rows.slice(0,TABLE_PAGE_SIZE).join('')}</tbody></table></div>${tablePagination(id,0,rows.length)}</section>`;
+  if (isPaginated) tablePageData.set(id, { rows, page: 0 });
+  const firstPage = isPaginated ? rows.slice(0, TABLE_PAGE_SIZE).join('') : rowMarkup;
+  return `<section class="table-component"><div class="table-wrap" tabindex="0" role="region" aria-label="Tabla desplazable"><table><thead><tr>${headers.map(h=>`<th>${e(h)}</th>`).join('')}</tr></thead><tbody id="table-page-body-${id}">${firstPage}</tbody></table></div>${isPaginated ? tablePagination(id,0,rows.length) : ''}</section>`;
 }
-
 function tablePagination(id, page, total) {
   if (total <= TABLE_PAGE_SIZE) return '';
   const pages = Math.ceil(total / TABLE_PAGE_SIZE), first = page * TABLE_PAGE_SIZE + 1,
