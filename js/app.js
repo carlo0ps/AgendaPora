@@ -417,11 +417,12 @@ function empty(title, body, icon = '♡') {
 
 function table(headers, rows) {
   const isPaginated = Array.isArray(rows);
-  const rowMarkup = isPaginated ? rows.join('') : typeof rows === 'string' ? rows : '';
+  const rowList = isPaginated ? Array.from(rows) : [];
+  const rowMarkup = isPaginated ? rowList.join('') : typeof rows === 'string' ? rows : '';
   if (!rowMarkup) return empty('Todavía está vacío', 'Cuando agregues información, aparecerá acá.', '✦');
   const id = ++tableRenderIndex;
-  if (isPaginated) tablePageData.set(id, { rows, page: 0 });
-  const firstPage = isPaginated ? rows.slice(0, TABLE_PAGE_SIZE).join('') : rowMarkup;
+  if (isPaginated) tablePageData.set(id, { rows: rowList, page: 0 });
+  const firstPage = isPaginated ? rowList.filter((_, index) => index < TABLE_PAGE_SIZE).join('') : rowMarkup;
   return `<section class="table-component"><div class="table-wrap" tabindex="0" role="region" aria-label="Tabla desplazable"><table><thead><tr>${headers.map(h=>`<th>${e(h)}</th>`).join('')}</tr></thead><tbody id="table-page-body-${id}">${firstPage}</tbody></table></div>${isPaginated ? tablePagination(id,0,rows.length) : ''}</section>`;
 }
 function tablePagination(id, page, total) {
@@ -437,7 +438,7 @@ function changeTablePage(id, delta) {
   const pages = Math.ceil(data.rows.length / TABLE_PAGE_SIZE);
   data.page = Math.max(0, Math.min(pages - 1, data.page + delta));
   const start = data.page * TABLE_PAGE_SIZE;
-  $(`#table-page-body-${id}`).innerHTML = data.rows.slice(start, start + TABLE_PAGE_SIZE).join('');
+  $(`#table-page-body-${id}`).innerHTML = data.rows.filter((_, index) => index >= start && index < start + TABLE_PAGE_SIZE).join('');
   const pager = $(`#table-pager-${id}`);
   if (pager) {
     pager.outerHTML = tablePagination(id, data.page, data.rows.length);
