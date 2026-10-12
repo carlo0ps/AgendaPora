@@ -84,6 +84,7 @@ const state = {
   onboardingStep: 0,
   passwordRecoverySession: null,
   onboardingSchemaMissing: false,
+  googleReviewSchemaMissing: false,
   drag: null,
   cashDate: dateInput(),
   cashLoading: false,
@@ -299,10 +300,13 @@ function setSubscription() {
     alert.innerHTML = `<strong>Tu suscripción ${remaining} (${e(datePY(profile.vence_el))}): renová para seguir editando.</strong> ${contact}`;
     alert.classList.remove('hidden');
   } else alert.classList.add('hidden');
-  alert.classList.toggle('onboarding-migration-alert', !!state.onboardingSchemaMissing && editable());
-  if (state.onboardingSchemaMissing && editable()) {
-    const message = '<strong>Falta actualizar la base para guardar “Primeros pasos”.</strong> Ejecutá <code>supabase/migracion_02.sql</code> en Supabase → SQL Editor.';
-    alert.innerHTML = alert.classList.contains('hidden') ? message : `${alert.innerHTML}<br>${message}`;
+  const schemaNotices = [];
+  if (state.onboardingSchemaMissing) schemaNotices.push('<strong>Falta actualizar la base para guardar “Primeros pasos”.</strong> Ejecutá <code>supabase/migracion_02.sql</code> en Supabase → SQL Editor.');
+  if (state.googleReviewSchemaMissing) schemaNotices.push('<strong>Falta actualizar la base para el link de reseñas.</strong> Ejecutá <code>supabase/migracion_05.sql</code> en Supabase → SQL Editor.');
+  alert.classList.toggle('onboarding-migration-alert', schemaNotices.length > 0 && editable());
+  if (schemaNotices.length && editable()) {
+    const notices = schemaNotices.join('<br>');
+    alert.innerHTML = alert.classList.contains('hidden') ? notices : alert.innerHTML + '<br>' + notices;
     alert.classList.remove('hidden');
   }
 }
@@ -310,21 +314,28 @@ async function getProfile() {
   const userId = state.client?.id;
   if (!userId) return null;
   const read = async () => {
-    let { data, error } = await supabase.from('perfiles')
-      .select('user_id,nombre,slug,telefono,direccion,logo_url,color_principal,horario_texto,horarios,vence_el,activo,visitas_premio,premio_descripcion,telefono_soporte,onboarding_estado,google_review_url')
-      .eq('user_id', userId).single();
-    if (error && missingOnboardingColumn(error)) {
-      const fallback = await supabase.from('perfiles')
-        .select('user_id,nombre,slug,telefono,direccion,logo_url,color_principal,horario_texto,horarios,vence_el,activo,visitas_premio,premio_descripcion,telefono_soporte,google_review_url')
+    const baseColumns = 'user_id,nombre,slug,telefono,direccion,logo_url,color_principal,horario_texto,horarios,vence_el,activo,visitas_premio,premio_descripcion,telefono_soporte';
+    const missingColumns = new Set();
+    let data = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const optionalColumns = ['onboarding_estado', 'google_review_url'].filter(column => !missingColumns.has(column));
+      const result = await supabase.from('perfiles')
+        .select([baseColumns, ...optionalColumns].join(','))
         .eq('user_id', userId).single();
-      if (fallback.error) throw fallback.error;
-      data = { ...fallback.data, onboarding_estado: 'migracion_requerida' };
-      state.onboardingSchemaMissing = true;
-    } else if (error) throw error;
-    else state.onboardingSchemaMissing = false;
+      if (!result.error) { data = result.data; break; }
+      const missingColumn = ['onboarding_estado', 'google_review_url'].find(column => missingProfileColumn(result.error, column));
+      if (!missingColumn || missingColumns.has(missingColumn)) throw result.error;
+      missingColumns.add(missingColumn);
+    }
+    if (!data) throw new Error('No se pudo cargar el perfil del salón.');
     if (state.client?.id !== userId) return null;
-    // Replace the whole in-memory snapshot only after Supabase returns a fresh, uncached row.
-    state.profile = { ...data };
+    state.onboardingSchemaMissing = missingColumns.has('onboarding_estado');
+    state.googleReviewSchemaMissing = missingColumns.has('google_review_url');
+    state.profile = {
+      ...data,
+      ...(state.onboardingSchemaMissing ? { onboarding_estado: 'migracion_requerida' } : {}),
+      ...(state.googleReviewSchemaMissing ? { google_review_url: null } : {})
+    };
     setBrand();
     setSubscription();
     return state.profile;
@@ -334,9 +345,9 @@ async function getProfile() {
   return pendingRead;
 }
 
-function missingOnboardingColumn(error) {
+function missingProfileColumn(error, column) {
   const message = String(error?.message || '').toLocaleLowerCase('es');
-  return message.includes('onboarding_estado') && (
+  return message.includes(column) && (
     error?.code === '42703' || error?.code === 'PGRST204' ||
     message.includes('does not exist') || message.includes('schema cache') || message.includes('could not find')
   );
@@ -1713,7 +1724,7 @@ async function saveProfile(ev) {
     color_principal: color,
     visitas_premio: Number(fd.get('visitas_premio')) || 10,
     premio_descripcion: String(fd.get('premio_descripcion')).trim(),
-    google_review_url: reviewUrl || null,
+    ...(!state.googleReviewSchemaMissing ? { google_review_url: reviewUrl || null } : {}),
     horario_texto: String(fd.get('horario_texto')).trim() || null,
     horarios
   };
@@ -1738,7 +1749,7 @@ async function saveProfile(ev) {
     }).eq('user_id', state.client.id);
     if (r.error) return toast(requestError(r.error), 'error');
   }
-  toast('Perfil del salón guardado');
+  toast(state.googleReviewSchemaMissing ? 'Perfil guardado. Ejecutá supabase/migracion_05.sql para habilitar el link de reseñas.' : 'Perfil del salón guardado');
   await refresh();
 }
 async function backupJSON() {
