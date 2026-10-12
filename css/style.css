@@ -1236,3 +1236,22 @@ font-size:1.45rem}
   .cash-print-area .toolbar {flex-wrap:wrap;align-items:flex-start}
   .cash-print-area #cash-date {width:100%;min-width:0}
 }
+
+.cash-breakdown-panel {min-width:0}
+.cash-breakdown-panel h2 {margin:0 0 .65rem}
+.cash-breakdown-list {display:grid;gap:.4rem;max-height:24rem;overflow:auto;overscroll-behavior:contain}
+.cash-breakdown-row {display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:.55rem;padding:.55rem .65rem;border:1px solid var(--border);border-radius:12px;background:var(--bg)}
+.cash-breakdown-row > div {min-width:0}
+.cash-breakdown-row strong {overflow-wrap:anywhere}
+.cash-breakdown-row small {display:block;margin-top:.15rem;color:var(--text-muted)}
+.cash-breakdown-amount {white-space:nowrap;text-align:right}
+@media print {
+  .cash-breakdown-list {max-height:none;overflow:visible}
+  .cash-breakdown-row {break-inside:avoid;background:#fff!important;color:#000!important;border:1px solid #777!important}
+  .cash-breakdown-row small {color:#333!important}
+}
+@media (max-width:560px) {
+  .cash-breakdown-panel {padding:.75rem}
+  .cash-breakdown-list {max-height:15rem;gap:.3rem}
+  .cash-breakdown-row {padding:.45rem .5rem;font-size:.85rem}
+}
