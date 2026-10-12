@@ -22,7 +22,7 @@ begin
   update public.perfiles set nombre='Bella Luna Estudio',slug='bella-luna-demo',email_contacto='demo@agendapora.test',
     telefono='0000000000',direccion='Villa Morra · Asunción',color_principal='#a84462',horario_texto='Lun a sáb · 08:00 a 18:00',
     horarios='{"1":{"inicio":"08:00","fin":"18:00"},"2":{"inicio":"08:00","fin":"18:00"},"3":{"inicio":"08:00","fin":"18:00"},"4":{"inicio":"08:00","fin":"18:00"},"5":{"inicio":"08:00","fin":"18:00"},"6":{"inicio":"08:00","fin":"16:00"}}'::jsonb,
-    vence_el=(now() at time zone 'America/Asuncion')::date+90,activo=true,visitas_premio=8,premio_descripcion='Brushing de regalo'
+    vence_el=(now() at time zone 'America/Asuncion')::date+90,activo=true,visitas_premio=8,premio_descripcion='Brushing de regalo',google_review_url='https://g.page/r/demo/review'
     where user_id=v_user;
 
   insert into public.servicios(user_id,nombre,precio_gs,duracion_min,activo) values
@@ -35,7 +35,8 @@ begin
     (v_user,'deuda','Aviso de saldo','Hola {nombre}, tu saldo pendiente en {salon} es {deuda}.'),
     (v_user,'promo','Promoción','Hola {nombre} 💕 Tenemos una promo especial en {salon}. ¡Escribinos para reservar!'),
     (v_user,'cumple','Cumpleaños','¡Feliz cumpleaños, {nombre}! 🎂 Te deseamos un hermoso día. Te esperamos en {salon}.'),
-    (v_user,'reactivacion','Te extrañamos','Hola {nombre} 💖 Hace un tiempo no te vemos por {salon}. ¿Agendamos?');
+    (v_user,'reactivacion','Te extrañamos','Hola {nombre} 💖 Hace un tiempo no te vemos por {salon}. ¿Agendamos?'),
+    (v_user,'agradecimiento','Agradecimiento y reseña','Gracias por venir, {nombre} 💕 ¿Nos dejás una reseña? {resena}');
 
   insert into public.clientas(user_id,nombre,telefono,email,fecha_nacimiento,notas)
   select v_user,n.nombre,'00000000'||lpad(i::text,2,'0'),'clienta'||i||'@demo.test',

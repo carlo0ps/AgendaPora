@@ -157,7 +157,7 @@ export function waLink(phone, message) {
   return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
 }
 export function fillTemplate(template, data) {
-  return String(template ?? '').replace(/\{(nombre|fecha|hora|deuda|salon)\}/g, (_, key) => String(data[key] ?? ''));
+  return String(template ?? '').replace(/\{(nombre|fecha|hora|deuda|salon|servicio|resena)\}/g, (_, key) => String(data[key] ?? ''));
 }
 export function localDateTime(date, time) {
   return new Date(`${date}T${time}:00-03:00`);
@@ -170,7 +170,12 @@ export function beginningOfWeek(date = new Date()) {
 export function requestError(error) {
   if (!error) return 'Ocurrió un error inesperado.';
   if (error.code === '23505') return 'Ese dato ya existe. Revisá e intentá nuevamente.';
-  if (error.code === 'PGRST202' || error.code === 'PGRST203') return 'La base todavía no tiene publicada la función de pagos actualizada. Ejecutá supabase/migracion_01.sql en el SQL Editor de Supabase y volvé a intentar.';
+  if (error.code === 'PGRST202' || error.code === 'PGRST203') {
+    const missing = String(error.message || '').toLocaleLowerCase('es');
+    return /guardar_turno|mover_turno|cobrar_turno_rapido|anular_cobro_turno|marcar_agradecido/.test(missing)
+      ? 'Falta publicar las funciones nuevas. Ejecutá supabase/migracion_04.sql en Supabase → SQL Editor y volvé a intentar.'
+      : 'La base todavía no tiene publicada la función de pagos actualizada. Ejecutá supabase/migracion_01.sql en el SQL Editor de Supabase y volvé a intentar.';
+  }
   if (error.code === '42501' || error.code === 'PGRST301') return 'Tu cuenta está en modo de solo lectura. Renová la suscripción o contactá a soporte para seguir editando.';
   return error.message || 'Ocurrió un error inesperado.';
 }

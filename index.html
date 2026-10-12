@@ -60,10 +60,11 @@
       <nav id="side-nav" class="side-nav" aria-label="Principal"></nav>
       <div class="sidebar-bottom"><button id="install-button" class="button soft full" type="button" data-install-app>Instalar app</button><a id="public-booking-link" class="button ghost full" target="_blank" rel="noopener">Ver reservas públicas</a><button id="theme-toggle" class="button ghost full">Cambiar tema</button><button id="logout-button" class="button ghost full">Salir</button><span class="tiny muted">America/Asuncion · Gs.</span></div>
     </aside>
-    <main class="main-area"><header class="topbar"><button id="mobile-menu" class="icon-button" type="button" aria-label="Abrir menú" aria-haspopup="dialog" aria-controls="mobile-menu-dialog" aria-expanded="false">☰</button><div><p class="eyebrow" id="page-kicker">Tu espacio</p><h1 id="page-title">Inicio</h1></div><div class="topbar-actions"><span id="subscription-badge" class="status-pill"></span><button id="install-button-top" class="button soft" type="button" data-install-app>Instalar</button><button id="logout-button-top" class="button ghost">Salir</button></div></header>
+    <main class="main-area"><header class="topbar"><button id="mobile-menu" class="icon-button" type="button" aria-label="Abrir menú" aria-haspopup="dialog" aria-controls="mobile-menu-dialog" aria-expanded="false">☰</button><div><p class="eyebrow" id="page-kicker">Tu espacio</p><h1 id="page-title">Inicio</h1></div><button class="global-search-trigger" type="button" data-action="quick-search-open" aria-label="Buscar clientas, turnos y servicios"><span aria-hidden="true">⌕</span><span class="search-trigger-label">Buscar</span><kbd>/</kbd></button><button class="keyboard-help-button" type="button" data-action="keyboard-help" aria-label="Ayuda de atajos de teclado">?</button><div class="topbar-actions"><span id="subscription-badge" class="status-pill"></span><button id="install-button-top" class="button soft" type="button" data-install-app>Instalar</button><button id="logout-button-top" class="button ghost">Salir</button></div></header>
       <div id="subscription-alert" class="notice hidden"></div><section id="view-root" class="view-root" aria-live="polite"></section>
     </main>
     <nav id="bottom-nav" class="bottom-nav" aria-label="Navegación móvil"></nav>
+    <div id="quick-actions" class="quick-actions"><div class="quick-action-menu"><button type="button" class="button soft" data-action="fab-appointment">＋ Nuevo turno</button><button type="button" class="button soft" data-action="fab-client">♡ Nueva clienta</button><button type="button" class="button soft" data-action="fab-expense">− Registrar gasto</button></div><button type="button" class="fab" data-action="fab-toggle" aria-label="Accesos rápidos" aria-expanded="false">＋</button></div>
   </div>
   <dialog id="mobile-menu-dialog" class="mobile-menu-dialog" aria-labelledby="mobile-menu-title">
     <div class="mobile-menu-frame">
@@ -92,5 +93,8 @@
       <div class="modal-body"><p id="install-guide-message" class="muted" role="status"></p></div>
       <footer class="modal-footer"><button class="button primary" type="button" data-modal-close>Entendido</button></footer>
     </div>
+  </dialog>
+  <dialog id="global-search-dialog" class="modal global-search-dialog" aria-labelledby="global-search-title">
+    <div class="modal-frame"><header class="modal-head"><div><p class="eyebrow">Búsqueda global</p><h2 id="global-search-title">¿Qué necesitás encontrar?</h2></div><button class="icon-button" type="button" data-action="quick-search-close" aria-label="Cerrar búsqueda">×</button></header><div class="modal-body"><label class="field"><span>Clienta, turno o servicio</span><input id="global-search-input" type="search" role="combobox" aria-autocomplete="list" aria-controls="global-search-results" aria-expanded="true" autocomplete="off" placeholder="Escribí para buscar…"></label><div id="global-search-results" role="listbox" aria-label="Resultados de búsqueda"></div></div><footer class="modal-footer"><span class="muted tiny">Flechas para moverte · Enter para abrir · Esc para cerrar</span></footer></div>
   </dialog>
 </body></html>

@@ -38,6 +38,7 @@ const NAV = [
   ['inicio', '⌂', 'Inicio'],
   ['clientas', '♡', 'Clientas'],
   ['agenda', '▦', 'Agenda'],
+  ['caja', '＄', 'Cierre de caja'],
   ['solicitudes', '✉', 'Reservas'],
   ['servicios', '✦', 'Servicios'],
   ['recordatorios', '◷', 'Mañana'],
@@ -49,13 +50,14 @@ const NAV = [
   ['configuracion', '⚙', 'Mi salón']
 ];
 const TABLES = ['clientas', 'servicios', 'turnos', 'pagos', 'plantillas', 'gastos', 'productos', 'empleadas', 'solicitudes_reserva', 'fotos_clienta'];
-const MUTATING_ACTIONS = new Set(['new-client','edit-client','new-service','edit-service','new-appointment','new-client-appointment','edit-appointment','done-appointment','pay-appointment','new-expense','new-product','edit-product','new-employee','edit-employee','delete-row','accept-request','reject-request','import-clients','save-templates']);
+const MUTATING_ACTIONS = new Set(['new-client','edit-client','new-service','edit-service','new-appointment','new-client-appointment','edit-appointment','done-appointment','pay-appointment','new-expense','new-product','edit-product','new-employee','edit-employee','delete-row','accept-request','reject-request','import-clients','save-templates','cancel-appointment','undo-payment','mark-thanks']);
 const TEMPLATES = [
   ['recordatorio', 'Recordatorio de turno', 'Hola {nombre} 😊 Te recuerdo tu turno en {salon} el {fecha} a las {hora}. ¡Te esperamos!'],
   ['deuda', 'Aviso de saldo', 'Hola {nombre}, te escribimos de {salon}. Tu saldo pendiente es {deuda}. Cualquier consulta estamos a las órdenes.'],
   ['promo', 'Promoción', 'Hola {nombre} 💕 Tenemos una promo especial en {salon}. ¡Escribinos para reservar!'],
   ['cumple', 'Cumpleaños', '¡Feliz cumpleaños, {nombre}! 🎂 Te deseamos un hermoso día. Te esperamos en {salon} para celebrar.'],
-  ['reactivacion', 'Te extrañamos', 'Hola {nombre} 💖 Hace un tiempo no te vemos por {salon}. Nos encantaría volver a atenderte. ¿Agendamos?']
+  ['reactivacion', 'Te extrañamos', 'Hola {nombre} 💖 Hace un tiempo no te vemos por {salon}. Nos encantaría volver a atenderte. ¿Agendamos?'],
+  ['agradecimiento', 'Agradecimiento y reseña', 'Gracias por venir, {nombre} 💕 ¿Nos dejás una reseña? {resena}']
 ];
 const ONBOARDING_SERVICES = [
   { nombre: 'Corte', precio_gs: 40000, duracion_min: 45 },
@@ -75,13 +77,23 @@ const state = {
   view: 'inicio',
   search: '',
   agendaDate: dateInput(),
-  agendaMode: 'dia',
+  agendaMode: innerWidth <= 720 ? 'dia' : 'semana',
   reportMode: 'mes',
   installPrompt: null,
   detailsClient: null,
   onboardingStep: 0,
   passwordRecoverySession: null,
-  onboardingSchemaMissing: false
+  onboardingSchemaMissing: false,
+  drag: null,
+  cashDate: dateInput(),
+  cashLoading: false,
+  cashData: null,
+  cashError: '',
+  cashLoadId: 0,
+  searchResults: [],
+  searchActive: 0,
+  searchTimer: null,
+  quickThanks: false
 };
 let supabase;
 let appSessionUserId = null;
@@ -90,6 +102,7 @@ let pendingAuthUserId = null;
 let profileReadQueue = Promise.resolve();
 let passwordRecoveryActive = new URLSearchParams(location.hash.slice(1)).get('type') === 'recovery';
 let onboardingCompletionPending = false;
+let suppressCalendarClickUntil = 0;
 const TABLE_PAGE_SIZE = 40;
 const tablePageData = new Map();
 let tableRenderIndex = 0;
@@ -298,11 +311,11 @@ async function getProfile() {
   if (!userId) return null;
   const read = async () => {
     let { data, error } = await supabase.from('perfiles')
-      .select('user_id,nombre,slug,telefono,direccion,logo_url,color_principal,horario_texto,horarios,vence_el,activo,visitas_premio,premio_descripcion,telefono_soporte,onboarding_estado')
+      .select('user_id,nombre,slug,telefono,direccion,logo_url,color_principal,horario_texto,horarios,vence_el,activo,visitas_premio,premio_descripcion,telefono_soporte,onboarding_estado,google_review_url')
       .eq('user_id', userId).single();
     if (error && missingOnboardingColumn(error)) {
       const fallback = await supabase.from('perfiles')
-        .select('user_id,nombre,slug,telefono,direccion,logo_url,color_principal,horario_texto,horarios,vence_el,activo,visitas_premio,premio_descripcion,telefono_soporte')
+        .select('user_id,nombre,slug,telefono,direccion,logo_url,color_principal,horario_texto,horarios,vence_el,activo,visitas_premio,premio_descripcion,telefono_soporte,google_review_url')
         .eq('user_id', userId).single();
       if (fallback.error) throw fallback.error;
       data = { ...fallback.data, onboarding_estado: 'migracion_requerida' };
@@ -460,6 +473,7 @@ function applyView() {
   renderNav();
   const renderers = {
     inicio: renderHome,
+    caja: renderCashClose,
     clientas: renderClients,
     agenda: renderAgenda,
     solicitudes: renderRequests,
@@ -492,14 +506,16 @@ function renderHome() {
   const debt = state.data.clientas.reduce((n, c) => n + Number(c.deuda_gs || 0), 0),
     birthdays = state.data.clientas.filter(c => birthdayInWeek(c.fecha_nacimiento)),
     pending = state.data.solicitudes_reserva.filter(r => r.estado === 'pendiente');
+  const thanksPending=state.data.turnos.filter(a=>a.estado==='hecho'&&!a.agradecido_at&&a.fecha>=shiftDate(today,-3)&&a.fecha<=today).sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.hora.localeCompare(a.hora));
   const scheduleRows = dayAppointments.slice(0, 7).map(a => {
     const c = clientById(a.clienta_id),
       s = serviceById(a.servicio_id);
-    return `<div class="list-row"><div class="avatar">${e((c?.nombre||a.nombre_publico||'?').slice(0,1).toUpperCase())}</div><div class="list-row-main"><strong>${e(timePY(a.hora))} · ${e(c?.nombre||a.nombre_publico||'Clienta')}</strong><small>${e(s?.nombre||a.servicio_nombre||'Servicio')} · ${money(a.precio_gs)}</small></div><span class="status ${e(a.estado)}">${e(a.estado)}</span></div>`
+    return `<div class="list-row"><div class="avatar">${e((c?.nombre||a.nombre_publico||'?').slice(0,1).toUpperCase())}</div><div class="list-row-main"><strong>${e(timePY(a.hora))} · ${e(c?.nombre||a.nombre_publico||'Clienta')}</strong><small>${e(s?.nombre||a.servicio_nombre||'Servicio')} · ${money(a.precio_gs)}</small></div>${callLink(c?.telefono||a.telefono_publico)}<span class="status ${e(a.estado)}">${e(a.estado)}</span>${a.estado==='pendiente'?`<button class="small-button primary" data-action="done-appointment" data-id="${e(a.id)}">Hecho / cobrar</button>`:''}</div>`
   });
   const birthdayRows = birthdays.slice(0, 5).map(c => `<div class="list-row"><div class="avatar">🎂</div><div class="list-row-main"><strong>${e(c.nombre)}</strong><small>${e(datePY(c.fecha_nacimiento))}</small></div><a class="small-button primary" href="${waLink(c.telefono,templateMessage('cumple',c,{fecha:'',hora:''}))}" target="_blank" rel="noopener">Saludar</a></div>`);
   return `<div class="page-stack">${onboardingChecklist()}<div class="metrics-grid">${metric('Turnos de hoy',dayAppointments.length,'En la agenda de hoy')}${metric('Ingresos hoy',money(todayIncome),'Pagos registrados hoy')}${metric('Ingresos semana / mes',`${money(weekIncome)} / ${money(monthIncome)}`,'Abonos cobrados · mes actual')}${metric('Deuda total',money(debt),`${state.data.clientas.filter(c=>Number(c.deuda_gs)>0).length} clientas con saldo`)}</div>
     ${pending.length?`<a class="notice" href="#solicitudes"><strong>${pending.length} solicitud${pending.length>1?'es':''} de reserva pendiente${pending.length>1?'s':''}.</strong> Revisar ahora →</a>`:''}
+    ${thanksPending.length?`<section class="panel"><div class="panel-head"><div><h2>Agradecimientos pendientes</h2><p class="muted tiny">Turnos hechos en los últimos tres días.</p></div></div><div class="list">${thanksPending.map(a=>{const c=clientById(a.clienta_id),phone=c?.telefono||a.telefono_publico;return `<div class="list-row"><div class="list-row-main"><strong>${e(c?.nombre||a.nombre_publico||'Clienta')}</strong><small>${datePY(a.fecha)} · ${e(serviceById(a.servicio_id)?.nombre||'Servicio')}</small></div><div class="table-actions">${callLink(phone)}${phone?`<button class="small-button primary" data-action="send-thanks" data-id="${e(a.id)}">WhatsApp</button>`:''}<button class="small-button" data-action="mark-thanks" data-id="${e(a.id)}">Marcar enviado</button></div></div>`}).join('')}</div></section>`:''}
     <div class="content-grid"><section class="panel"><div class="panel-head"><h2>Agenda de hoy</h2><a href="#agenda">Ver agenda →</a></div><div class="list">${scheduleRows.join('')||empty('Un día para organizar','Todavía no tenés turnos para hoy. Agregá uno o compartí tu link de reservas.','▦')}</div><div class="toolbar mt-1"><button class="button primary" data-action="new-appointment">＋ Nuevo turno</button><button class="button soft" data-action="share-booking">Compartir reservas</button></div></section><section class="panel"><div class="panel-head"><h2>Cumpleaños de la semana</h2><span>🎂</span></div><div class="list">${birthdayRows.join('')||empty('Esta semana está tranquila','Los próximos cumpleaños van a aparecer acá.','🎂')}</div></section></div>
     <section class="panel"><div class="panel-head"><div><h2>Accesos rápidos</h2><p class="muted tiny">Lo que necesitás, a mano.</p></div></div><div class="toolbar"><button class="button soft" data-action="new-client">＋ Agregar clienta</button><button class="button soft" data-action="share-catalog">Compartir catálogo</button><a class="button ghost" href="#recordatorios">Turnos de mañana</a><button class="button ghost" data-action="backup-json">Descargar respaldo</button></div></section></div>`;
 }
@@ -518,19 +534,101 @@ function birthdayInWeek(value) {
 function renderClients() {
   const search = state.search.trim().toLocaleLowerCase('es');
   const clients = clientsSorted().filter(c => !search || `${c.nombre} ${c.telefono} ${c.notas||''}`.toLocaleLowerCase('es').includes(search));
-  const rows = clients.map(c => `<tr><td><button class="text-button" data-action="client-details" data-id="${e(c.id)}">${e(c.nombre)}</button></td><td>${e(c.telefono||'—')}</td><td>${e(c.email||'—')}</td><td>${money(c.deuda_gs)}</td><td>${Number(c.visitas||0)} visitas${Number(c.visitas||0)>=Number(state.profile?.visitas_premio||10)?' · 🎁':''}</td><td><div class="table-actions"><button class="small-button" data-action="client-details" data-id="${e(c.id)}">Ficha</button><button class="small-button" data-action="edit-client" data-id="${e(c.id)}">Editar</button><button class="small-button danger" data-action="delete-row" data-table="clientas" data-id="${e(c.id)}">Borrar</button>${c.telefono?`<a class="small-button primary" href="${waLink(c.telefono,templateMessage(Number(c.deuda_gs)>0?'deuda':'promo',c))}" target="_blank" rel="noopener">WhatsApp</a>`:''}</div></td></tr>`);
+  const rows = clients.map(c => `<tr><td><button class="text-button" data-action="client-details" data-id="${e(c.id)}">${e(c.nombre)}</button></td><td>${e(c.telefono||'—')}</td><td>${e(c.email||'—')}</td><td>${money(c.deuda_gs)}</td><td>${Number(c.visitas||0)} visitas${Number(c.visitas||0)>=Number(state.profile?.visitas_premio||10)?' · 🎁':''}</td><td><div class="table-actions"><button class="small-button" data-action="client-details" data-id="${e(c.id)}">Ficha</button>${callLink(c.telefono)}<button class="small-button" data-action="edit-client" data-id="${e(c.id)}">Editar</button><button class="small-button danger" data-action="delete-row" data-table="clientas" data-id="${e(c.id)}">Borrar</button>${c.telefono?`<a class="small-button primary" href="${waLink(c.telefono,templateMessage(Number(c.deuda_gs)>0?'deuda':'promo',c))}" target="_blank" rel="noopener">WhatsApp</a>`:''}</div></td></tr>`);
   return `${heading('Clientas','Tu comunidad',`<button class="button primary" data-action="new-client">＋ Agregar clienta</button>`)}<div class="toolbar"><input class="search" id="client-search" type="search" placeholder="Buscar por nombre, teléfono o notas…" value="${e(state.search)}"><button class="button soft" data-action="import-clients">Importar CSV</button><button class="button ghost" data-action="export-clients">Exportar CSV</button></div>${table(['Nombre','Teléfono','Correo','Deuda','Fidelización',''],rows)}`;
 }
 
 function renderAgenda() {
-  const date = state.agendaDate,
-    list = state.agendaMode === 'dia' ? appointments(date) : state.data.turnos.filter(a => a.fecha >= date && a.fecha <= weekEnd(date)).sort((a, b) => a.fecha.localeCompare(b.fecha) || a.hora.localeCompare(b.hora));
-  const rows = list.map(a => `<tr><td>${state.agendaMode==='semana'?datePY(a.fecha):e(timePY(a.hora))}</td>${state.agendaMode==='semana'?`<td>${e(timePY(a.hora))}</td>`:''}<td><strong>${e(clientById(a.clienta_id)?.nombre||a.nombre_publico||'Clienta')}</strong></td><td>${e(serviceById(a.servicio_id)?.nombre||a.servicio_nombre||'Servicio')}</td><td>${money(a.precio_gs)}</td><td><span class="status ${e(a.estado)}">${e(a.estado)}</span></td><td>${e(employeeById(a.empleada_id)?.nombre||'—')}</td><td><div class="table-actions"><button class="small-button" data-action="edit-appointment" data-id="${e(a.id)}">Editar</button><button class="small-button" data-action="pay-appointment" data-id="${e(a.id)}">Cobrar</button><button class="small-button danger" data-action="delete-row" data-table="turnos" data-id="${e(a.id)}">Borrar</button></div></td></tr>`);
-  return `${heading('Agenda','Turnos',`<button class="button primary" data-action="new-appointment">＋ Nuevo turno</button>`)}<div class="toolbar agenda-toolbar"><div class="agenda-date-controls"><button class="button ghost" data-action="agenda-prev">← Anterior</button><label class="field agenda-date-field"><span class="tiny muted">Fecha</span><input id="agenda-date" type="date" value="${e(date)}"></label><button class="button ghost" data-action="agenda-next">Siguiente →</button></div><div class="agenda-view-toggle"><button class="button ${state.agendaMode==='dia'?'soft':'ghost'}" data-action="agenda-day">Día</button><button class="button ${state.agendaMode==='semana'?'soft':'ghost'}" data-action="agenda-week">Semana</button></div></div>${table(state.agendaMode==='dia'?['Hora','Clienta','Servicio','Precio','Estado','Empleada','']:['Fecha','Hora','Clienta','Servicio','Precio','Estado','Empleada',''],rows)}`;
+  const date = state.agendaDate;
+  const weekStart=dateInput(beginningOfWeek(new Date(`${date}T12:00:00`)));
+  const dates = state.agendaMode === 'dia' ? [date] : Array.from({length:7},(_,i)=>shiftDate(weekStart,i));
+  const actualDates = state.agendaMode === 'dia' ? [date] : dates;
+  const hours = validSchedule(state.profile?.horarios) ? state.profile.horarios : defaultHours();
+  const weekdayOf=d=>new Date(`${d}T12:00:00-03:00`).getUTCDay();
+  const workingHours=actualDates.map(d=>hours[String(weekdayOf(d))]).filter(Boolean);
+  const openMinutes = workingHours.length?Math.min(...workingHours.map(h=>minutesOf(h.inicio))):480;
+  const closeMinutes = workingHours.length?Math.max(...workingHours.map(h=>minutesOf(h.fin))):1200;
+  const start = Math.floor(openMinutes/60)*60, end = Math.ceil(closeMinutes/60)*60, rowHeight = 64;
+  const ticks = Array.from({length:Math.max(1,(end-start)/60)},(_,i)=>`<div class="cal-hour" style="top:${i*rowHeight}px">${String(Math.floor(start/60)+i).padStart(2,'0')}:00</div>`).join('');
+  const columns = actualDates.map(day => {
+    const weekday = weekdayOf(day), shift = hours[String(weekday)], closed = !shift;
+    const min = shift ? Number(shift.inicio.slice(0,2))*60+Number(shift.inicio.slice(3,5)) : start;
+    const max = shift ? Number(shift.fin.slice(0,2))*60+Number(shift.fin.slice(3,5)) : end;
+    const blocks = state.data.turnos.filter(a=>a.fecha===day).map(a=>{
+      const svc=serviceById(a.servicio_id), c=clientById(a.clienta_id), minute=Number(a.hora.slice(0,2))*60+Number(a.hora.slice(3,5));
+      const duration=Number(svc?.duracion_min||60), top=(minute-start)/60*rowHeight, height=Math.max(38,duration/60*rowHeight-3);
+      return `<button type="button" class="cal-event state-${e(a.estado)} ${a.empleada_id?'staff-'+(state.data.empleadas.findIndex(x=>x.id===a.empleada_id)%5):''}" style="top:${top}px;height:${height}px" data-action="appointment-details" data-id="${e(a.id)}" data-drag-id="${e(a.id)}"><strong>${e(timePY(a.hora))} · ${e(c?.nombre||a.nombre_publico||'Clienta')}</strong><span>${e(svc?.nombre||'Servicio')}</span></button>`;
+    }).join('');
+    const isToday=day===dateInput(), nowParts=new Intl.DateTimeFormat('en-GB',{timeZone:'America/Asuncion',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()), nowMinute=Number(nowParts.find(p=>p.type==='hour')?.value||0)*60+Number(nowParts.find(p=>p.type==='minute')?.value||0);
+    const nowLine=isToday&&nowMinute>=start&&nowMinute<=end?`<i class="cal-now" style="top:${(nowMinute-start)/60*rowHeight}px" aria-label="Hora actual"></i>`:'';
+    return `<div class="cal-day-column ${closed?'is-closed':''}" data-calendar-date="${e(day)}"><header>${['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'][weekday]} <strong>${e(day.slice(8,10))}</strong>${closed?'<small>Cerrado</small>':''}</header><div class="cal-day-grid" style="height:${(end-start)/60*rowHeight}px;--calendar-start:${start}px" data-calendar-date="${e(day)}">${nowLine}${blocks}</div></div>`;
+  }).join('');
+  const title=state.agendaMode==='dia'?datePY(date):`${datePY(actualDates[0])} — ${datePY(actualDates.at(-1))}`;
+  return `${heading('Agenda','Turnos',`<button class="button primary" data-action="new-appointment">＋ Nuevo turno</button>`)}<div class="toolbar agenda-toolbar"><div class="agenda-date-controls"><button class="button ghost" data-action="agenda-prev" aria-label="Período anterior">←</button><label class="field agenda-date-field"><span class="tiny muted">${e(title)}</span><input id="agenda-date" type="date" value="${e(date)}"></label><button class="button ghost" data-action="agenda-next" aria-label="Período siguiente">→</button><button class="button soft" data-action="agenda-today">Hoy</button></div><div class="agenda-view-toggle"><button class="button ${state.agendaMode==='dia'?'soft':'ghost'}" data-action="agenda-day">Día</button><button class="button ${state.agendaMode==='semana'?'soft':'ghost'}" data-action="agenda-week">Semana</button></div></div><p class="muted tiny">Tocá un espacio libre para agendar. Mantené presionado un turno para moverlo.</p><div class="calendar-scroll ${state.agendaMode==='semana'?'week-view':''}"><div class="calendar-grid" style="--cal-hours:${(end-start)/60};--cal-row:${rowHeight}px"><div class="cal-time-axis">${ticks}</div>${columns}</div></div>`;
 }
 
 function weekEnd(start) {
   return shiftDate(start, 6);
+}
+
+function normalizedPhone(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('595')) digits = digits.slice(3);
+  if (digits.startsWith('0')) digits = digits.slice(1);
+  return `+595${digits}`;
+}
+
+function callLink(phone, label = 'Llamar') {
+  const normalized = normalizedPhone(phone);
+  return normalized ? `<a class="small-button" href="tel:${e(normalized)}">${e(label)}</a>` : '';
+}
+
+function minutesOf(time) { const [h,m]=String(time||'00:00').slice(0,5).split(':').map(Number); return h*60+m; }
+function timeAtMinutes(value) { const m=Math.max(0,Math.round(value/15)*15); return `${String(Math.floor(m/60)%24).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; }
+function turnOverlap(candidate, exceptId = null) {
+  const duration=Number(serviceById(candidate.servicio_id)?.duracion_min||60), start=minutesOf(candidate.hora), end=start+duration;
+  return state.data.turnos.find(t=>t.id!==exceptId&&t.fecha===candidate.fecha&&t.estado!=='cancelado'&&
+    (!candidate.empleada_id || !t.empleada_id || t.empleada_id===candidate.empleada_id) &&
+    start<minutesOf(t.hora)+Number(serviceById(t.servicio_id)?.duracion_min||60)&&minutesOf(t.hora)<end);
+}
+
+async function onCalendarPointerDown(ev) {
+  const block=ev.target.closest('[data-drag-id]');
+  if (!block || ev.button>0) return;
+  const turn=state.data.turnos.find(t=>t.id===block.dataset.dragId);
+  if (!turn||turn.estado==='cancelado') return;
+  const startDrag=()=>{ state.drag={turn,block,pointerId:ev.pointerId,startX:ev.clientX,startY:ev.clientY,active:true}; block.classList.add('is-dragging'); };
+  if (ev.pointerType==='touch') {
+    const timer=setTimeout(startDrag,300);
+    const cancel=()=>clearTimeout(timer);
+    block.addEventListener('pointerup',cancel,{once:true}); block.addEventListener('pointercancel',cancel,{once:true});
+  } else startDrag();
+}
+
+function calendarPointerMove(ev) {
+  const drag=state.drag; if(!drag?.active) return;
+  const grid=document.elementFromPoint(ev.clientX,ev.clientY)?.closest('.cal-day-grid');
+  if(!grid) return;
+  const bounds=grid.getBoundingClientRect(), current=parseInt(getComputedStyle(grid).getPropertyValue('--calendar-start')||'480',10), minutes=Math.round((ev.clientY-bounds.top+grid.scrollTop)/64*60+current);
+  const hour=timeAtMinutes(minutes); drag.preview={fecha:grid.dataset.calendarDate,hora:hour};
+  drag.block.style.transform=`translate(${ev.clientX-drag.startX}px,${ev.clientY-drag.startY}px)`;
+  drag.block.dataset.preview=`${datePY(drag.preview.fecha)} ${hour}`;
+  drag.block.classList.add('has-preview');
+}
+
+async function calendarPointerUp(ev) {
+  const drag=state.drag; if(!drag) return;
+  state.drag=null; drag.block.classList.remove('is-dragging','has-preview'); drag.block.style.transform='';
+  if(!drag.active||!drag.preview) return;
+  suppressCalendarClickUntil=Date.now()+600;
+  const overlap=turnOverlap({...drag.turn,...drag.preview},drag.turn.id);
+  const force=overlap?confirm(`Este horario se superpone con ${clientById(overlap.clienta_id)?.nombre||'otro turno'}. ¿Guardar igual?`):false;
+  if(overlap&&!force) return;
+  try {
+    const {error}=await supabase.rpc('mover_turno',{p_turno_id:drag.turn.id,p_fecha:drag.preview.fecha,p_hora:drag.preview.hora,p_permitir_solapamiento:force});
+    if(error) throw error; toast('Turno movido'); await refresh();
+  } catch(error) { toast(requestError(error),'error'); applyView(); }
 }
 
 function renderRequests() {
@@ -577,6 +675,81 @@ function renderReactivation() {
   })).filter(c => !c.last || c.last <= cut).sort((a, b) => (a.last || '').localeCompare(b.last || ''));
   const rows = results.map(c => `<tr><td><strong>${e(c.nombre)}</strong></td><td>${e(c.telefono||'—')}</td><td>${c.last?datePY(c.last):'Sin turnos registrados'}</td><td>${money(c.deuda_gs)}</td><td><a class="small-button primary" href="${waLink(c.telefono,templateMessage('reactivacion',c))}" target="_blank" rel="noopener">Escribir</a></td></tr>`);
   return `${heading('Volver a conectar','Reactivación')}<div class="toolbar"><label class="field"><span class="tiny muted">Sin venir por</span><select id="reactivate-days"><option value="30" ${days===30?'selected':''}>30 días</option><option value="60" ${days===60?'selected':''}>60 días</option><option value="90" ${days===90?'selected':''}>90 días</option></select></label></div>${table(['Clienta','Teléfono','Última visita','Saldo',''],rows)}`;
+}
+
+function renderCashClose() {
+  const cash=state.cashData, date=state.cashDate;
+  if(state.cashError) return `${heading('Cierre de caja','Control diario')}<div class="toolbar"><label class="field"><span class="tiny muted">Fecha del cierre</span><input id="cash-date" type="date" value="${e(date)}"></label></div><section class="panel" role="alert"><p>${e(state.cashError)}</p><button class="button primary" data-action="refresh-cash">Reintentar</button></section>`;
+  if(!cash) return `${heading('Cierre de caja','Control diario')}<div class="toolbar"><label class="field"><span class="tiny muted">Fecha del cierre</span><input id="cash-date" type="date" value="${e(date)}"></label><span class="muted">${state.cashLoading?'Cargando movimientos…':'Seleccioná un día para consultar los movimientos.'}</span></div>`;
+  const methods=['Efectivo','Transferencia','Tigo Money'];
+  const byMethod=Object.fromEntries(methods.map(m=>[m,cash.payments.filter(p=>p.medio===m).reduce((n,p)=>n+Number(p.monto_gs),0)]));
+  const debtGenerated=cash.appointments.filter(a=>a.estado==='hecho').reduce((sum,a)=>sum+Math.max(0,Number(a.precio_gs)-cash.payments.filter(p=>p.turno_id===a.id).reduce((n,p)=>n+Number(p.monto_gs),0)),0);
+  const appointmentIds=new Set(cash.appointments.map(a=>a.id));
+  const debtPaid=cash.payments.filter(p=>!appointmentIds.has(p.turno_id)).reduce((n,p)=>n+Number(p.monto_gs),0);
+  const total=Object.values(byMethod).reduce((a,b)=>a+b,0),expenses=cash.expenses.reduce((n,x)=>n+Number(x.monto_gs),0);
+  const serviceGroups=new Map(),employeeGroups=new Map();
+  for(const a of cash.appointments.filter(x=>x.estado==='hecho')) { const service=serviceById(a.servicio_id)?.nombre||'Servicio'; const current=serviceGroups.get(service)||{count:0,total:0};current.count++;current.total+=Number(a.precio_gs);serviceGroups.set(service,current);const emp=employeeById(a.empleada_id)?.nombre||'Sin empleada', amount=Math.round(Number(a.precio_gs)*Number(employeeById(a.empleada_id)?.comision_pct||0)/100);employeeGroups.set(emp,(employeeGroups.get(emp)||0)+amount); }
+  const serviceRows=[...serviceGroups].map(([name,item])=>`<tr><td>${e(name)}</td><td>${item.count}</td><td>${money(item.total)}</td></tr>`).join('');
+  const employeeRows=[...employeeGroups].map(([name,amount])=>`<tr><td>${e(name)}</td><td>${money(amount)}</td></tr>`).join('');
+  return `<div class="cash-print-area">${heading('Cierre de caja','Control diario',`<div class="button-group"><button class="button soft" data-action="cash-print">Imprimir</button><button class="button ghost" data-action="cash-whatsapp">Enviar por WhatsApp</button></div>`)}<div class="toolbar no-print"><label class="field"><span class="tiny muted">Fecha del cierre</span><input id="cash-date" type="date" value="${e(date)}"></label><span class="muted">${cash.appointments.filter(a=>a.estado==='hecho').length} turnos realizados</span></div><h2 class="cash-date-title">${e(datePY(date))} · ${e(salonName())}</h2><div class="metrics-grid cash-metrics">${metric('Efectivo',money(byMethod.Efectivo),'')}${metric('Transferencia',money(byMethod.Transferencia),'')}${metric('Tigo Money',money(byMethod['Tigo Money']),'')}${metric('Deuda generada',money(debtGenerated),'')}${metric('Abonos de deuda',money(debtPaid),'')}${metric('Gastos',money(expenses),'')}${metric('Neto',money(total-expenses),'Cobrado − gastos')}</div><div class="content-grid"><section class="panel"><h2>Servicios realizados</h2>${table(['Servicio','Cantidad','Total'],serviceRows)}</section><section class="panel"><h2>Comisiones por empleada</h2>${table(['Empleada','Comisión del día'],employeeRows)}</section><section class="panel"><h2>Gastos del día</h2>${table(['Concepto','Monto'],cash.expenses.map(x=>`<tr><td>${e(x.concepto)}</td><td>${money(x.monto_gs)}</td></tr>`).join(''))}</section></div></div>`;
+}
+
+async function loadCashClose(date, force = false) {
+  if(!date||state.cashLoading&&!force) return;
+  const requestId=++state.cashLoadId;
+  state.cashLoading=true; state.cashError=''; state.cashData=null; if(state.view==='caja') applyView();
+  try {
+    const [appointmentsResult,paymentsResult,expensesResult]=await Promise.all([
+      supabase.from('turnos').select('id,clienta_id,servicio_id,empleada_id,fecha,hora,precio_gs,estado').eq('fecha',date).order('hora'),
+      supabase.from('pagos').select('id,turno_id,clienta_id,fecha,monto_gs,medio,nota').eq('fecha',date),
+      supabase.from('gastos').select('id,fecha,concepto,monto_gs').eq('fecha',date)
+    ]);
+    for(const result of [appointmentsResult,paymentsResult,expensesResult]) if(result.error) throw result.error;
+    if(requestId===state.cashLoadId) state.cashData={date,appointments:appointmentsResult.data||[],payments:paymentsResult.data||[],expenses:expensesResult.data||[]};
+  } catch(error) { if(requestId===state.cashLoadId) state.cashError=requestError(error); throw error;
+  } finally { if(requestId===state.cashLoadId) {state.cashLoading=false;if(state.view==='caja') applyView();} }
+}
+
+function shareCashClose() {
+  if(!state.cashData) return toast('Esperá a que cargue el cierre.','error');
+  const {appointments,payments,expenses}=state.cashData,method=name=>payments.filter(p=>p.medio===name).reduce((n,p)=>n+Number(p.monto_gs),0);
+  const debt=appointments.filter(a=>a.estado==='hecho').reduce((sum,a)=>sum+Math.max(0,Number(a.precio_gs)-payments.filter(p=>p.turno_id===a.id).reduce((n,p)=>n+Number(p.monto_gs),0)),0);
+  const appointmentIds=new Set(appointments.map(a=>a.id)),debtPaid=payments.filter(p=>!appointmentIds.has(p.turno_id)).reduce((n,p)=>n+Number(p.monto_gs),0),costs=expenses.reduce((n,x)=>n+Number(x.monto_gs),0);
+  const gross=method('Efectivo')+method('Transferencia')+method('Tigo Money');
+  const text=`Cierre de caja · ${datePY(state.cashDate)} · ${salonName()}\nTurnos hechos: ${appointments.filter(a=>a.estado==='hecho').length}\nEfectivo: ${money(method('Efectivo'))}\nTransferencia: ${money(method('Transferencia'))}\nTigo Money: ${money(method('Tigo Money'))}\nDeuda generada: ${money(debt)}\nAbonos de deuda: ${money(debtPaid)}\nGastos: ${money(costs)}\nNeto cobrado − gastos: ${money(gross-costs)}`;
+  window.open(waLink('',text),'_blank','noopener');
+}
+
+function foldText(value) { return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es'); }
+function openGlobalSearch() { const dialog=$('#global-search-dialog'); dialog.showModal(); $('#global-search-input').value=''; $('#global-search-input').focus(); renderGlobalSearch(''); }
+function renderGlobalSearch(query) {
+  const target=$('#global-search-results'), q=foldText(query.trim());
+  if(!q) { target.innerHTML='<p class="muted">Buscá una clienta, turno o servicio.</p>'; return; }
+  target.innerHTML='<p class="muted" role="status">Buscando…</p>';
+  clearTimeout(state.searchTimer);
+  state.searchTimer=setTimeout(()=>{
+    const clients=state.data.clientas.filter(c=>foldText(`${c.nombre} ${c.telefono}`).includes(q)).slice(0,8);
+    const appointments=state.data.turnos.filter(a=>foldText(`${clientById(a.clienta_id)?.nombre||a.nombre_publico||''} ${serviceById(a.servicio_id)?.nombre||''} ${datePY(a.fecha)} ${a.fecha}`).includes(q)).slice(0,8);
+    const services=state.data.servicios.filter(s=>foldText(s.nombre).includes(q)).slice(0,8);
+    state.searchResults=[...clients.map(x=>({kind:'client',item:x})),...appointments.map(x=>({kind:'appointment',item:x})),...services.map(x=>({kind:'service',item:x}))];state.searchActive=0;
+    const groups=[['client','Clientas','♡',x=>`${x.nombre} · ${x.telefono||'Sin teléfono'}`],['appointment','Turnos','▦',x=>`${datePY(x.fecha)} ${timePY(x.hora)} · ${clientById(x.clienta_id)?.nombre||x.nombre_publico||'Clienta'} · ${serviceById(x.servicio_id)?.nombre||'Servicio'}`],['service','Servicios','✦',x=>`${x.nombre} · ${money(x.precio_gs)}`]];
+    const html=groups.map(([kind,label,icon,text])=>{const items=state.searchResults.filter(r=>r.kind===kind);return items.length?`<section><h3>${icon} ${label}</h3>${items.map((r,i)=>`<button role="option" aria-selected="${state.searchActive===state.searchResults.indexOf(r)}" id="global-search-option-${state.searchResults.indexOf(r)}" class="search-result" data-action="global-search-result" data-kind="${kind}" data-id="${e(r.item.id)}"><span>${e(text(r.item))}</span><span aria-hidden="true">↗</span></button>`).join('')}</section>`:''}).join('');
+    target.innerHTML=html||'<p class="empty-state">No encontramos coincidencias.</p>'; $('#global-search-input').setAttribute('aria-activedescendant',state.searchResults.length?'global-search-option-0':'');
+  },250);
+}
+function moveSearchActive(delta) {
+  if(!state.searchResults.length) return;
+  state.searchActive=(state.searchActive+delta+state.searchResults.length)%state.searchResults.length;
+  $$('.search-result').forEach((el,i)=>el.setAttribute('aria-selected',String(i===state.searchActive)));
+  $('#global-search-input').setAttribute('aria-activedescendant',`global-search-option-${state.searchActive}`);
+  document.getElementById(`global-search-option-${state.searchActive}`)?.scrollIntoView({block:'nearest'});
+}
+function openSearchResult(kind,id) {
+  $('#global-search-dialog').close();
+  if(kind==='client') return clientDetails(id);
+  if(kind==='service') return newServiceForm(state.data.servicios.find(s=>s.id===id));
+  const appointment=state.data.turnos.find(a=>a.id===id); if(!appointment) return;
+  state.agendaDate=appointment.fecha;state.agendaMode='dia';location.hash='#agenda';setTimeout(()=>appointmentDetails(id),0);
 }
 
 function renderReports() {
@@ -650,8 +823,8 @@ function renderSettings() {
       defaultText
     }));
   const moreLinks = NAV.filter(([id]) => !['inicio','clientas','agenda','solicitudes','configuracion'].includes(id)).map(([id, icon, label]) => `<a class="button ghost" href="#${id}">${icon} ${e(label)}</a>`).join('');
-  return `${heading('Perfil del salón','Configuración')}<section class="panel"><div class="panel-head"><h2>Más herramientas</h2></div><div class="toolbar">${moreLinks}<button class="button soft" type="button" data-install-app>Instalar app</button></div></section><div class="content-grid"><form id="profile-form" class="panel form-grid"><label class="field wide">Nombre del salón<input name="nombre" maxlength="100" required value="${e(p.nombre||'')}"></label><label class="field">Slug de reservas<input value="${e(p.slug||'')}" disabled><small class="muted">Tu enlace público incluye este identificador.</small></label><label class="field">Teléfono del salón<input name="telefono" type="tel" maxlength="24" value="${e(p.telefono||'')}"></label><label class="field wide">Dirección<input name="direccion" maxlength="180" value="${e(p.direccion||'')}"></label><label class="field">Color principal<input name="color_principal" type="color" value="${e(validColor(p.color_principal)?p.color_principal:getComputedStyle(document.body).getPropertyValue('--primary-fill').trim())}"></label><label class="field">Visitas para premio<input name="visitas_premio" type="number" min="2" max="100" value="${Number(p.visitas_premio||10)}"></label><label class="field">Premio de fidelidad<input name="premio_descripcion" maxlength="100" value="${e(p.premio_descripcion||'Servicio o descuento especial')}"></label><label class="field wide">Horario de atención<input name="horario_texto" maxlength="180" placeholder="Lun a sáb · 08:00 a 18:00" value="${e(p.horario_texto||'')}"></label><label class="field wide">Horario semanal para reservas (JSON)<textarea name="horarios_json" rows="5">${e(JSON.stringify(p.horarios||defaultHours(),null,2))}</textarea><small class="muted">Usá formato 24 h y días 0 domingo… 6 sábado. Ej.: {"1":{"inicio":"08:00","fin":"18:00"}}.</small></label><label class="field wide">Logo del salón<input type="file" name="logo" accept="image/png,image/jpeg,image/webp"></label><div class="field wide"><button class="button primary" type="submit">Guardar perfil</button></div></form>
-    <div class="page-stack"><section class="panel"><h2>Reservas públicas</h2><p class="muted tiny">Compartí el enlace para que tus clientas soliciten horario.</p><input class="input" readonly value="${e(bookingURL())}"><div class="toolbar"><button class="button soft" data-action="share-booking">Copiar link</button><button class="button ghost" data-action="whatsapp-booking">Compartir por WhatsApp</button></div></section><section class="panel"><h2>Fidelización</h2><p class="muted">Cada ${Number(p.visitas_premio||10)} visitas: ${e(p.premio_descripcion||'un premio especial')}.</p></section><section class="panel"><h2>Respaldo y datos</h2><p class="muted tiny">El respaldo contiene la información del salón que puede leer tu cuenta.</p><div class="toolbar"><button class="button soft" data-action="backup-json">Descargar JSON</button><button class="button ghost" data-action="backup-csv">Descargar CSV</button></div></section><section class="panel"><h2>Mensajes de WhatsApp</h2><p class="muted tiny">Editá las plantillas. Variables: {nombre}, {fecha}, {hora}, {deuda}, {salon}.</p>${templates.map(t=>`<label class="field">${e(t.label)}<textarea class="template-input" data-template="${e(t.key)}" rows="3">${e(t.row?.contenido||t.defaultText)}</textarea></label>`).join('')}<button class="button primary" data-action="save-templates">Guardar mensajes</button></section><section class="panel"><h2>Cambiar contraseña</h2><p class="muted tiny">Usá una contraseña nueva de al menos ocho caracteres.</p><form id="logged-password-form" class="password-settings-form"><label class="field">Nueva contraseña<input name="password" type="password" autocomplete="new-password" minlength="8" required></label><label class="field">Confirmar contraseña<input name="password_confirm" type="password" autocomplete="new-password" minlength="8" required></label><button class="button primary password-save" type="submit">Guardar contraseña</button><p id="logged-password-message" class="password-settings-message form-error" role="status" aria-live="polite"></p></form></section><section class="panel"><h2>Modo de pantalla</h2><p class="muted">Se guarda en este dispositivo.</p><button class="button ghost" data-action="toggle-theme">Cambiar tema</button></section></div></div>`;
+  return `${heading('Perfil del salón','Configuración')}<section class="panel"><div class="panel-head"><h2>Más herramientas</h2></div><div class="toolbar">${moreLinks}<button class="button soft" type="button" data-install-app>Instalar app</button></div></section><div class="content-grid"><form id="profile-form" class="panel form-grid"><label class="field wide">Nombre del salón<input name="nombre" maxlength="100" required value="${e(p.nombre||'')}"></label><label class="field">Slug de reservas<input value="${e(p.slug||'')}" disabled><small class="muted">Tu enlace público incluye este identificador.</small></label><label class="field">Teléfono del salón<input name="telefono" type="tel" maxlength="24" value="${e(p.telefono||'')}"></label><label class="field wide">Dirección<input name="direccion" maxlength="180" value="${e(p.direccion||'')}"></label><label class="field">Color principal<input name="color_principal" type="color" value="${e(validColor(p.color_principal)?p.color_principal:getComputedStyle(document.body).getPropertyValue('--primary-fill').trim())}"></label><label class="field">Visitas para premio<input name="visitas_premio" type="number" min="2" max="100" value="${Number(p.visitas_premio||10)}"></label><label class="field">Premio de fidelidad<input name="premio_descripcion" maxlength="100" value="${e(p.premio_descripcion||'Servicio o descuento especial')}"></label><label class="field wide">Link de reseñas de Google<input name="google_review_url" type="url" maxlength="500" placeholder="https://g.page/r/.../review" value="${e(p.google_review_url||'')}"><small class="muted">Obtenelo desde Perfil de Empresa de Google → Pedir reseñas. Usá un enlace HTTPS.</small></label><label class="field wide">Horario de atención<input name="horario_texto" maxlength="180" placeholder="Lun a sáb · 08:00 a 18:00" value="${e(p.horario_texto||'')}"></label><label class="field wide">Horario semanal para reservas (JSON)<textarea name="horarios_json" rows="5">${e(JSON.stringify(p.horarios||defaultHours(),null,2))}</textarea><small class="muted">Usá formato 24 h y días 0 domingo… 6 sábado. Ej.: {"1":{"inicio":"08:00","fin":"18:00"}}.</small></label><label class="field wide">Logo del salón<input type="file" name="logo" accept="image/png,image/jpeg,image/webp"></label><div class="field wide"><button class="button primary" type="submit">Guardar perfil</button></div></form>
+    <div class="page-stack"><section class="panel"><h2>Reservas públicas</h2><p class="muted tiny">Compartí el enlace para que tus clientas soliciten horario.</p><input class="input" readonly value="${e(bookingURL())}"><div class="toolbar"><button class="button soft" data-action="share-booking">Copiar link</button><button class="button ghost" data-action="whatsapp-booking">Compartir por WhatsApp</button></div></section><section class="panel"><h2>Fidelización</h2><p class="muted">Cada ${Number(p.visitas_premio||10)} visitas: ${e(p.premio_descripcion||'un premio especial')}.</p></section><section class="panel"><h2>Respaldo y datos</h2><p class="muted tiny">El respaldo contiene la información del salón que puede leer tu cuenta.</p><div class="toolbar"><button class="button soft" data-action="backup-json">Descargar JSON</button><button class="button ghost" data-action="backup-csv">Descargar CSV</button></div></section><section class="panel"><h2>Mensajes de WhatsApp</h2><p class="muted tiny">Editá las plantillas. Variables: {nombre}, {fecha}, {hora}, {deuda}, {salon}; agradecimiento usa también {servicio} y {resena}.</p>${templates.map(t=>`<label class="field">${e(t.label)}<textarea class="template-input" data-template="${e(t.key)}" rows="3">${e(t.row?.contenido||t.defaultText)}</textarea></label>`).join('')}<button class="button primary" data-action="save-templates">Guardar mensajes</button></section><section class="panel"><h2>Cambiar contraseña</h2><p class="muted tiny">Usá una contraseña nueva de al menos ocho caracteres.</p><form id="logged-password-form" class="password-settings-form"><label class="field">Nueva contraseña<input name="password" type="password" autocomplete="new-password" minlength="8" required></label><label class="field">Confirmar contraseña<input name="password_confirm" type="password" autocomplete="new-password" minlength="8" required></label><button class="button primary password-save" type="submit">Guardar contraseña</button><p id="logged-password-message" class="password-settings-message form-error" role="status" aria-live="polite"></p></form></section><section class="panel"><h2>Modo de pantalla</h2><p class="muted">Se guarda en este dispositivo.</p><button class="button ghost" data-action="toggle-theme">Cambiar tema</button></section></div></div>`;
 }
 
 function validColor(value) {
@@ -843,8 +1016,58 @@ function templateMessage(key, client, extra = {}) {
     fecha: extra.fecha || '',
     hora: extra.hora || '',
     deuda: money(client?.deuda_gs || 0),
-    salon: salonName()
+    salon: salonName(),
+    servicio: extra.servicio || '',
+    resena: state.profile?.google_review_url ? `\n${state.profile.google_review_url}` : ''
   });
+}
+
+function appointmentDetails(id) {
+  const a=state.data.turnos.find(t=>t.id===id); if(!a) return;
+  const c=clientById(a.clienta_id),service=serviceById(a.servicio_id),payments=state.data.pagos.filter(p=>p.turno_id===id),phone=c?.telefono||a.telefono_publico;
+  const call=callLink(phone), wa=phone?`<a class="small-button primary" href="${waLink(phone,`Hola ${c?.nombre||a.nombre_publico||''}, sobre tu turno en ${salonName()}.`)}" target="_blank" rel="noopener">WhatsApp</a>`:'';
+  const paymentActions=payments.length?`<p><strong>Cobrado:</strong> ${money(payments.reduce((n,p)=>n+Number(p.monto_gs),0))}</p>`:'';
+  const undoAction=a.estado==='hecho'?`<button class="button danger" data-action="undo-payment" data-id="${e(id)}">Anular cobro / deuda</button>`:'';
+  const thanks=a.agradecido_at?'<span class="status hecho">Agradecimiento enviado</span>':a.estado==='hecho'?`<button class="button soft" data-action="send-thanks" data-id="${e(id)}">Enviar agradecimiento</button>`:'';
+  showModal('Detalle del turno',`<div class="appointment-detail"><h3>${e(c?.nombre||a.nombre_publico||'Clienta')}</h3><p>${e(datePY(a.fecha))} · ${e(timePY(a.hora))}</p><p>${e(service?.nombre||'Servicio')} · ${money(a.precio_gs)} · ${Number(service?.duracion_min||60)} min</p><p><span class="status ${e(a.estado)}">${e(a.estado)}</span> · ${e(employeeById(a.empleada_id)?.nombre||'Sin empleada')}</p><div class="toolbar">${call}${wa}</div><div class="toolbar"><button class="button ghost" data-action="edit-appointment" data-id="${e(id)}">Editar</button>${a.estado==='pendiente'?`<button class="button primary" data-action="done-appointment" data-id="${e(id)}">Marcar hecho y cobrar</button><button class="button danger" data-action="cancel-appointment" data-id="${e(id)}">Cancelar turno</button>`:''}</div><div class="toolbar">${paymentActions}${undoAction}${thanks}</div></div>`,'Cerrar');
+  $('#modal-footer').innerHTML='<button class="button ghost" type="button" data-modal-close>Cerrar</button>';
+}
+
+async function undoPayment(id) {
+  if(!requireEditable()||!confirm('¿Anular el cobro y volver el turno a pendiente?')) return;
+  const {error}=await supabase.rpc('anular_cobro_turno',{p_turno_id:id}); if(error) throw error;
+  toast('Cobro anulado y saldo recalculado'); $('#modal').close(); await refresh();
+}
+
+function thanksMessage(turn) {
+  const client=clientById(turn.clienta_id)||{nombre:turn.nombre_publico||'Clienta'},template=state.data.plantillas.find(x=>x.clave==='agradecimiento');
+  let content=template?.contenido||TEMPLATES.find(x=>x[0]==='agradecimiento')[2];
+  if(!state.profile?.google_review_url) content=content.replace(/\s*¿Nos dejás una reseña\?\s*\{resena\}/i,'');
+  return fillTemplate(content,{
+    nombre:client.nombre,salon:salonName(),servicio:serviceById(turn.servicio_id)?.nombre||'servicio',
+    resena:state.profile?.google_review_url?`\n${state.profile.google_review_url}`:''
+  }).replace(/\s*\{resena\}/g,'').trim();
+}
+
+async function sendThanks(id) {
+  const turn=state.data.turnos.find(a=>a.id===id),client=turn&&clientById(turn.clienta_id),phone=client?.telefono||turn?.telefono_publico;
+  if(!turn||turn.agradecido_at) return toast('Este turno ya tiene agradecimiento marcado.');
+  if(!phone) return toast('No hay teléfono para abrir WhatsApp.','error');
+  const popup=window.open('about:blank','_blank');
+  try {
+    const {data,error}=await supabase.from('turnos').select('agradecido_at').eq('id',id).maybeSingle();
+    if(error) throw error;
+    if(data?.agradecido_at) { turn.agradecido_at=data.agradecido_at; popup?.close(); return toast('Este turno ya tiene agradecimiento marcado.'); }
+    if(popup) popup.location.href=waLink(phone,thanksMessage(turn));
+    else return toast('El navegador bloqueó la ventana de WhatsApp. Permití ventanas emergentes e intentá de nuevo.','error');
+  } catch(error) { popup?.close(); throw error; }
+  toast('Después de enviar el mensaje, marcá el agradecimiento como enviado.');
+}
+
+async function markThanksSent(id) {
+  if(!requireEditable()) return;
+  const {error}=await supabase.rpc('marcar_agradecido',{p_turno_id:id}); if(error) throw error;
+  toast('Agradecimiento marcado como enviado'); await refresh();
 }
 
 function drawChart(labels, values) {
@@ -912,6 +1135,11 @@ function bindView() {
     localStorage.setItem('reactivate-days', ev.target.value);
     applyView();
   });
+  $('#cash-date')?.addEventListener('change', ev => {
+    state.cashDate = ev.target.value || dateInput();
+    loadCashClose(state.cashDate,true).catch(error => toast(requestError(error), 'error'));
+  });
+  if (state.view === 'caja' && state.cashData?.date !== state.cashDate && !state.cashLoading && !state.cashError) loadCashClose(state.cashDate).catch(error => toast(requestError(error), 'error'));
   if (state.view === 'reportes') {
     drawChart(state.chart?.labels || [], state.chart?.values || []);
     addEventListener('resize', () => drawChart(state.chart?.labels || [], state.chart?.values || []), {
@@ -1067,7 +1295,8 @@ function newServiceForm(service = {}) {
 
 function appointmentForm(item = {}) {
   const edit = !!item.id;
-  showModal(edit ? 'Editar turno' : 'Nuevo turno', `<form id="entity-form" class="form-grid">${selectField('Clienta','clienta_id',clientsSorted().map(c=>[c.id,c.nombre]),item.clienta_id||'')}${selectField('Servicio','servicio_id',serviceOptions(),item.servicio_id||'')}${formField('Fecha','fecha',item.fecha||state.agendaDate,'date',{required:true})}${formField('Hora','hora',timePY(item.hora)||'09:00','time',{required:true})}${formField('Precio (Gs.)','precio_gs',item.precio_gs||0,'number',{required:true,min:0})}${selectField('Empleada','empleada_id',employeeOptions(),item.empleada_id||'',false)}${selectField('Estado','estado',[['pendiente','Pendiente'],['hecho','Hecho'],['cancelado','Cancelado']],item.estado||'pendiente')}${formField('Notas','notas',item.notas||'','textarea',{wide:true,maxlength:1000})}</form>`, edit ? 'Guardar cambios' : 'Agendar turno');
+  const statusOptions=item.estado==='hecho'?[['hecho','Hecho']]:[['pendiente','Pendiente'],['cancelado','Cancelado']];
+  showModal(edit ? 'Editar turno' : 'Nuevo turno', `<form id="entity-form" class="form-grid">${selectField('Clienta','clienta_id',clientsSorted().map(c=>[c.id,c.nombre]),item.clienta_id||'')}${selectField('Servicio','servicio_id',serviceOptions(),item.servicio_id||'')}${formField('Fecha','fecha',item.fecha||state.agendaDate,'date',{required:true})}${formField('Hora','hora',timePY(item.hora)||'09:00','time',{required:true})}${formField('Precio (Gs.)','precio_gs',item.precio_gs||0,'number',{required:true,min:0})}${selectField('Empleada','empleada_id',employeeOptions(),item.empleada_id||'',false)}${selectField('Estado','estado',statusOptions,item.estado||'pendiente')}${formField('Notas','notas',item.notas||'','textarea',{wide:true,maxlength:1000})}</form>`, edit ? 'Guardar cambios' : 'Agendar turno');
   const form = $('#modal-body form');
   form.elements.servicio_id.addEventListener('change', () => {
     const service = serviceById(form.elements.servicio_id.value);
@@ -1085,31 +1314,40 @@ function appointmentForm(item = {}) {
         estado: r.estado,
         notas: r.notas?.trim() || null
       };
-    const result = edit ? await supabase.from('turnos').update(payload).eq('id', item.id) : await supabase.from('turnos').insert(payload);
-    if (result.error) throw result.error;
+    const overlap=turnOverlap(payload,edit?item.id:null), force=overlap?confirm(`Este horario se superpone con ${clientById(overlap.clienta_id)?.nombre||'otro turno'}. ¿Guardar igual?`):false;
+    if(overlap&&!force) return;
+    const {error}=await supabase.rpc('guardar_turno',{p_turno_id:edit?item.id:null,p_clienta_id:payload.clienta_id,p_servicio_id:payload.servicio_id,p_fecha:payload.fecha,p_hora:payload.hora,p_precio_gs:payload.precio_gs,p_empleada_id:payload.empleada_id,p_estado:payload.estado,p_notas:payload.notas,p_permitir_solapamiento:force});
+    if (error) throw error;
     toast(edit ? 'Turno actualizado' : 'Turno agregado');
     await refresh();
   });
 }
 
 function paymentForm(item) {
+  if (!item) return;
   const c = clientById(item.clienta_id);
-  showModal('Registrar pago', `<form id="entity-form" class="form-grid"><p class="wide muted">${e(c?.nombre||'Clienta')} · ${e(serviceById(item.servicio_id)?.nombre||'Turno')} · ${datePY(item.fecha)} ${timePY(item.hora)}</p>${formField('Monto recibido (Gs.)','monto_gs',item.precio_gs,'number',{required:true,min:1})}${formField('Fecha de pago','fecha',dateInput(),'date',{required:true})}<label class="field">Medio<select name="medio"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option><option>Otro</option></select></label>${formField('Nota','nota','','text',{maxlength:240})}</form>`, 'Registrar pago');
-  modalSubmit(async form => {
-    const r = formObject(form);
-    const {
-      error
-    } = await supabase.rpc('registrar_pago_turno', {
-      p_turno_id: item.id,
-      p_monto_gs: Number(r.monto_gs),
-      p_fecha: r.fecha,
-      p_medio: r.medio,
-      p_nota: r.nota || null
-    });
-    if (error) throw error;
-    toast('Pago registrado y deuda recalculada');
-    await refresh();
-  });
+  if(item.estado==='hecho'&&state.data.pagos.some(p=>p.turno_id===item.id)) return toast('Este turno ya tiene un pago. Abrí su detalle para ver o anular el cobro.');
+  state.quickThanks=false;
+  showModal('Cobro rápido', `<form id="quick-payment-form" class="form-grid"><p class="wide muted">${e(c?.nombre||'Clienta')} · ${e(serviceById(item.servicio_id)?.nombre||'Turno')} · ${datePY(item.fecha)} ${timePY(item.hora)}</p>${formField('Monto recibido (Gs.)','monto_gs',item.precio_gs,'number',{required:true,min:0,max:item.precio_gs})}${formField('Fecha de pago','fecha',dateInput(),'date',{required:true})}<label class="check-field wide"><input name="agradecer" type="checkbox">Enviar agradecimiento por WhatsApp</label><div class="cash-methods wide"><button type="button" class="button primary" data-action="cash-medium" data-cash-medium="Efectivo" data-turn-id="${e(item.id)}">Efectivo</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Transferencia" data-turn-id="${e(item.id)}">Transferencia</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Tigo Money" data-turn-id="${e(item.id)}">Tigo Money</button><button type="button" class="button ghost" data-action="cash-medium" data-cash-medium="Deuda" data-turn-id="${e(item.id)}">Deuda</button></div><p class="wide muted tiny">Si cobrás menos del precio, la diferencia se suma automáticamente a la deuda.</p></form>`, '');
+  $('#quick-payment-form').addEventListener('submit',ev=>ev.preventDefault());
+  $('#modal-submit')?.remove(); $('#modal-footer').innerHTML='<button class="button ghost" type="button" data-modal-close>Cancelar</button>';
+}
+
+async function completeQuickPayment(button) {
+  if(!requireEditable()) return;
+  const form=$('#quick-payment-form'), id=button.dataset.turnId, medio=button.dataset.cashMedium, item=state.data.turnos.find(a=>a.id===id);
+  const amount=medio==='Deuda'?0:Number(form.elements.monto_gs.value), date=form.elements.fecha.value;
+  if(medio!=='Deuda'&&(!Number.isInteger(amount)||(amount<=0&&Number(item?.precio_gs)>0)||amount>Number(item?.precio_gs))) return toast('Ingresá un monto entre 1 y el precio del servicio.','error');
+  const thanks=form.elements.agradecer.checked, client=clientById(item?.clienta_id), thanksPhone=client?.telefono||item?.telefono_publico;
+  if(thanks&&!thanksPhone) return toast('Esta clienta no tiene teléfono. Desmarcá el agradecimiento o completá su número.','error');
+  setBusy(button,true,'Guardando…');
+  const thanksWindow=thanks?window.open('about:blank','_blank'):null;
+  try {
+    const {error}=await supabase.rpc('cobrar_turno_rapido',{p_turno_id:id,p_monto_gs:amount,p_fecha:date,p_medio:medio});
+    if(error) throw error;
+    $('#modal').close(); toast(medio==='Deuda'?'Turno realizado y saldo agregado a la deuda.':'Cobro registrado; la deuda se actualizó.');
+    await refresh(); if(thanks&&thanksWindow) { thanksWindow.location.href=waLink(thanksPhone,thanksMessage(item)); }
+  } catch(error) { thanksWindow?.close(); toast(requestError(error),'error'); setBusy(button,false); }
 }
 
 function expenseForm() {
@@ -1195,9 +1433,24 @@ async function handleAction(ev) {
       clienta_id: id
     }) : toast('La cuenta está en modo de solo lectura.', 'error');
     if (action === 'edit-appointment') return editable() ? appointmentForm(state.data.turnos.find(a => a.id === id)) : toast('La cuenta está en modo de solo lectura.', 'error');
-    if (action === 'done-appointment') return changeAppointment(id, {
-      estado: 'hecho'
-    });
+    if (action === 'done-appointment') return paymentForm(state.data.turnos.find(a => a.id === id));
+    if (action === 'cash-medium') return completeQuickPayment(b);
+    if (action === 'cancel-appointment') return changeAppointment(id,{estado:'cancelado'}).then(()=>$('#modal').close());
+    if (action === 'appointment-details') return appointmentDetails(id);
+    if (action === 'quick-search-open') return openGlobalSearch();
+    if (action === 'quick-search-close') return $('#global-search-dialog').close();
+    if (action === 'keyboard-help') { showModal('Atajos de teclado','<ul><li><kbd>n</kbd> Nuevo turno</li><li><kbd>/</kbd> o <kbd>Ctrl+K</kbd> Búsqueda global</li><li><kbd>?</kbd> Ver esta ayuda</li></ul>','Cerrar'); return; }
+    if (action === 'global-search-result') return openSearchResult(b.dataset.kind, id);
+    if (action === 'refresh-cash') return loadCashClose(state.cashDate,true);
+    if (action === 'cash-print') return window.print();
+    if (action === 'cash-whatsapp') return shareCashClose();
+    if (action === 'fab-toggle') { const open=$('#quick-actions').classList.toggle('open'); b.setAttribute('aria-expanded',String(open)); return; }
+    if (action === 'fab-appointment') { $('#quick-actions').classList.remove('open'); return appointmentForm(); }
+    if (action === 'fab-client') { $('#quick-actions').classList.remove('open'); return newClientForm(); }
+    if (action === 'fab-expense') { $('#quick-actions').classList.remove('open'); return expenseForm(); }
+    if (action === 'mark-thanks') return markThanksSent(id);
+    if (action === 'send-thanks') return sendThanks(id);
+    if (action === 'undo-payment') return undoPayment(id);
     if (action === 'pay-appointment') return paymentForm(state.data.turnos.find(a => a.id === id));
     if (action === 'new-expense') return expenseForm();
     if (action === 'new-product') return productForm();
@@ -1206,6 +1459,7 @@ async function handleAction(ev) {
     if (action === 'edit-employee') return employeeForm(state.data.empleadas.find(a => a.id === id));
     if (action === 'employee-commission') return showCommission(id);
     if (action === 'delete-row') return deleteRow(b.dataset.table, id);
+    if (action === 'agenda-today') { state.agendaDate = dateInput(); return applyView(); }
     if (action === 'agenda-prev' || action === 'agenda-next') {
       state.agendaDate = shiftDate(state.agendaDate, (action === 'agenda-prev' ? -1 : 1) * (state.agendaMode === 'semana' ? 7 : 1));
       return applyView();
@@ -1350,7 +1604,7 @@ async function clientDetails(id) {
     const r = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(p.storage_path, 1800);
     if (!r.error) signed[p.id] = r.data.signedUrl;
   }));
-  const history = visits.map(a => `<div class="list-row"><div class="list-row-main"><strong>${datePY(a.fecha)} · ${e(timePY(a.hora))} · ${e(serviceById(a.servicio_id)?.nombre||'Servicio')}</strong><small>${e(a.estado)} · ${money(a.precio_gs)} · ${e(a.notas||'')}</small></div></div>`).join('') || empty('Sin historial', 'Los turnos de esta clienta aparecerán acá.');
+  const history = visits.map(a => `<div class="list-row"><div class="list-row-main"><button class="text-button" data-action="appointment-details" data-id="${e(a.id)}"><strong>${datePY(a.fecha)} · ${e(timePY(a.hora))} · ${e(serviceById(a.servicio_id)?.nombre||'Servicio')}</strong></button><small>${e(a.estado)} · ${money(a.precio_gs)} · ${e(a.notas||'')}</small></div>${callLink(c.telefono)}<button class="small-button" data-action="appointment-details" data-id="${e(a.id)}">Detalle</button></div>`).join('') || empty('Sin historial', 'Los turnos de esta clienta aparecerán acá.');
   const photoHTML = photos.map(p => signed[p.id] ? `<div class="photo-tile"><a href="${e(signed[p.id])}" target="_blank" rel="noopener"><img src="${e(signed[p.id])}" alt="Foto ${e(p.tipo)}"><small>${e(p.tipo)}</small></a><button class="photo-delete" data-action="delete-row" data-table="fotos_clienta" data-id="${e(p.id)}" aria-label="Eliminar foto">×</button></div>` : '').join('');
   const paymentHistory = payments.map(p => `<div class="list-row"><div class="list-row-main"><strong>${datePY(p.fecha)} · ${money(p.monto_gs)}</strong><small>${e(p.medio)} · ${e(p.nota||'Abono')}</small></div></div>`).join('') || '<p class="muted tiny">Todavía no hay pagos registrados.</p>';
   const loyalty = Number(c.visitas || 0),
@@ -1358,7 +1612,7 @@ async function clientDetails(id) {
     award = loyalty > 0 && loyalty % goal === 0;
   const paymentButtons = visits.filter(a => a.estado !== 'cancelado').map(a => `<div class="list-row"><div class="list-row-main"><strong>${datePY(a.fecha)} · ${e(serviceById(a.servicio_id)?.nombre||'Servicio')}</strong><small>${e(a.estado)} · ${money(a.precio_gs)}</small></div><button class="small-button primary" data-action="pay-appointment" data-id="${e(a.id)}">Registrar abono</button></div>`).join('') || '<p class="muted tiny">No hay turnos para asociar un pago.</p>';
   const body = `<div class="profile-layout">
-    <section class="profile-side panel"><div class="avatar">${e(c.nombre.slice(0,1).toUpperCase())}</div><div><h3>${e(c.nombre)}</h3><p class="muted tiny">${e(c.telefono||'Sin teléfono')}<br>${e(c.email||'')}</p><strong>${money(c.deuda_gs)}</strong><small class="muted"> saldo pendiente</small></div></section>
+    <section class="profile-side panel"><div class="avatar">${e(c.nombre.slice(0,1).toUpperCase())}</div><div><h3>${e(c.nombre)}</h3><p class="muted tiny">${e(c.telefono||'Sin teléfono')}<br>${e(c.email||'')}</p><div class="table-actions">${callLink(c.telefono)}${c.telefono?`<a class="small-button primary" href="${waLink(c.telefono,'Hola '+c.nombre)}" target="_blank" rel="noopener">WhatsApp</a>`:''}</div><strong>${money(c.deuda_gs)}</strong><small class="muted"> saldo pendiente</small></div></section>
     <section class="profile-detail"><div class="loyalty-box">💝 ${loyalty} visitas · ${award?'¡Le corresponde premio!':`${Math.max(0,goal-loyalty%goal)} para su próximo premio (${e(state.profile.premio_descripcion||'premio')})`}</div>
       <div class="panel"><div class="panel-head"><h3>Historial de turnos</h3><button class="small-button primary" data-action="new-client-appointment" data-id="${e(c.id)}">Nuevo turno</button></div><div class="list">${history}</div></div>
       <div class="panel"><div class="panel-head"><h3>Fórmulas y notas técnicas</h3><button class="small-button" data-action="edit-client" data-id="${e(c.id)}">Editar notas</button></div><p class="muted">${e(c.notas||'Sin notas técnicas registradas.')}</p></div>
@@ -1369,12 +1623,6 @@ async function clientDetails(id) {
   $('#modal-footer').innerHTML = '<button class="button ghost" type="button" data-modal-close>Cerrar ficha</button>';
   $('#modal-body').onchange = ev => {
     if (ev.target.id === 'client-photo-upload') handlePhotoUpload(ev).catch(error => toast(requestError(error), 'error'));
-  };
-  $('#modal-body').onclick = ev => {
-    const action = ev.target.closest('[data-action]');
-    if (action) handleAction({
-      currentTarget: action
-    });
   };
 }
 async function handlePhotoUpload(ev) {
@@ -1454,7 +1702,8 @@ async function saveProfile(ev) {
   if (!validColor(color)) return toast('El color debe ser hexadecimal.', 'error');
   const phone = String(fd.get('telefono')).trim();
   if (phone && !validPhone(phone)) return toast('Ingresá un teléfono válido (entre 7 y 15 dígitos).', 'error');
-  const salon = String(fd.get('nombre')).trim();
+  const salon = String(fd.get('nombre')).trim(), reviewUrl=String(fd.get('google_review_url')||'').trim();
+  if (reviewUrl) { try { const parsed=new URL(reviewUrl); if(parsed.protocol!=='https:'||reviewUrl.length>500) throw new Error(); } catch { return toast('El link de reseñas debe ser una URL HTTPS válida.','error'); } }
   if (!salon) return toast('Ingresá el nombre del salón.', 'error');
   if (!validSchedule(horarios)) return toast('Revisá el horario: elegí al menos un día y usá horas válidas de inicio y cierre.', 'error');
   const payload = {
@@ -1464,6 +1713,7 @@ async function saveProfile(ev) {
     color_principal: color,
     visitas_premio: Number(fd.get('visitas_premio')) || 10,
     premio_descripcion: String(fd.get('premio_descripcion')).trim(),
+    google_review_url: reviewUrl || null,
     horario_texto: String(fd.get('horario_texto')).trim() || null,
     horarios
   };
@@ -1685,6 +1935,7 @@ async function showApp(session) {
   state.exportLoading = null;
   state.profile = null;
   state.data = Object.fromEntries(TABLES.map(table => [table, []]));
+  state.cashData=null; state.cashError=''; state.cashLoading=false; state.cashLoadId++;
   $('#login-screen').classList.add('hidden');
   $('#password-screen').classList.add('hidden');
   $('#blocked-screen').classList.add('hidden');
@@ -1881,9 +2132,34 @@ async function init() {
       changeTablePage(Number(pageButton.dataset.tablePage), Number(pageButton.dataset.pageDelta));
       return;
     }
-    if (ev.target.closest('[data-action]')) handleAction({
-      currentTarget: ev.target.closest('[data-action]')
-    });
+    if (ev.target.closest('[data-action]')) {
+      const action=ev.target.closest('[data-action]');
+      if(action.dataset.dragId&&Date.now()<suppressCalendarClickUntil) return;
+      handleAction({currentTarget:action});
+    }
+    else if(ev.target.closest('.cal-day-grid')) {
+      const grid=ev.target.closest('.cal-day-grid'), rect=grid.getBoundingClientRect(), start=Number.parseInt(getComputedStyle(grid).getPropertyValue('--calendar-start'))||480;
+      const at=timeAtMinutes(start+(ev.clientY-rect.top+grid.scrollTop)/64*60);
+      appointmentForm({fecha:grid.dataset.calendarDate,hora:at});
+    }
+  });
+  $('#view-root').addEventListener('pointerdown',onCalendarPointerDown);
+  document.addEventListener('pointermove',calendarPointerMove);
+  document.addEventListener('pointerup',calendarPointerUp);
+  $('#global-search-input').addEventListener('input',ev=>renderGlobalSearch(ev.target.value));
+  $('#global-search-input').addEventListener('keydown',ev=>{
+    if(ev.key==='ArrowDown'){ev.preventDefault();moveSearchActive(1)}
+    else if(ev.key==='ArrowUp'){ev.preventDefault();moveSearchActive(-1)}
+    else if(ev.key==='Enter'&&state.searchResults[state.searchActive]){ev.preventDefault();const r=state.searchResults[state.searchActive];openSearchResult(r.kind,r.item.id)}
+    else if(ev.key==='Escape') $('#global-search-dialog').close();
+  });
+  document.addEventListener('keydown',ev=>{
+    if(ev.key==='Escape') { $('#quick-actions').classList.remove('open'); $('[data-action="fab-toggle"]')?.setAttribute('aria-expanded','false'); }
+    if(!state.client||state.locked) return;
+    if(ev.target.matches('input,textarea,select,[contenteditable="true"]')||$('#modal').open||$('#onboarding-dialog').open||$('#global-search-dialog').open) return;
+    if(ev.key==='/'||(ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='k'){ev.preventDefault();openGlobalSearch()}
+    else if(ev.key.toLowerCase()==='n'&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey){ev.preventDefault();appointmentForm()}
+    else if(ev.key==='?') showModal('Atajos de teclado','<ul><li><kbd>n</kbd> Nuevo turno</li><li><kbd>/</kbd> o <kbd>Ctrl+K</kbd> Búsqueda global</li><li><kbd>?</kbd> Ver esta ayuda</li></ul>','Cerrar');
   });
   document.addEventListener('click', ev => {
     const installButton = ev.target.closest('[data-install-app]');
@@ -1893,7 +2169,10 @@ async function init() {
       return;
     }
     if (ev.target.closest('[data-modal-close]')) ev.target.closest('dialog')?.close();
+    const globalAction=ev.target.closest('[data-action]');
+    if(globalAction&&!globalAction.closest('#view-root')) handleAction({currentTarget:globalAction});
   });
+  $('#modal').addEventListener('close',()=>$('#quick-actions').classList.remove('open'));
   window.addEventListener('beforeinstallprompt', ev => {
     ev.preventDefault();
     state.installPrompt = ev;
@@ -1943,6 +2222,7 @@ async function init() {
         state.exportLoaded = false;
         state.exportLoading = null;
         state.data = Object.fromEntries(TABLES.map(table => [table, []]));
+        state.cashData=null; state.cashError=''; state.cashLoading=false; state.cashLoadId++;
         state.passwordRecoverySession = null;
         passwordRecoveryActive = false;
         state.onboardingSchemaMissing = false;

@@ -25,6 +25,7 @@ create table if not exists public.perfiles (
   visitas_premio integer not null default 10 check (visitas_premio between 2 and 100),
   premio_descripcion text not null default 'Servicio o descuento especial',
   telefono_soporte text,
+  google_review_url text check (google_review_url is null or (char_length(google_review_url)<=500 and google_review_url ~ '^https://')),
   onboarding_estado text not null default 'pendiente',
   constraint perfiles_slug_formato check (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$')
 );
@@ -64,7 +65,7 @@ create table if not exists public.turnos (
   created_at timestamptz not null default now(), clienta_id uuid, servicio_id uuid, empleada_id uuid,
   fecha date not null, hora time not null, precio_gs bigint not null default 0 check (precio_gs >= 0),
   estado text not null default 'pendiente' check (estado in ('pendiente','hecho','cancelado')),
-  notas text check (notas is null or char_length(notas) <= 2000), nombre_publico text, telefono_publico text,
+  notas text check (notas is null or char_length(notas) <= 2000), nombre_publico text, telefono_publico text, agradecido_at timestamptz,
   constraint turnos_clienta_fk foreign key(user_id,clienta_id) references public.clientas(user_id,id) on delete set null (clienta_id),
   constraint turnos_servicio_fk foreign key(user_id,servicio_id) references public.servicios(user_id,id) on delete set null (servicio_id),
   constraint turnos_empleada_fk foreign key(user_id,empleada_id) references public.empleadas(user_id,id) on delete set null (empleada_id),
@@ -83,7 +84,7 @@ create table if not exists public.pagos (
 
 create table if not exists public.plantillas (
   id uuid primary key default gen_random_uuid(), user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  created_at timestamptz not null default now(), clave text not null check (clave in ('recordatorio','deuda','promo','cumple','reactivacion')),
+  created_at timestamptz not null default now(), clave text not null check (clave in ('recordatorio','deuda','promo','cumple','reactivacion','agradecimiento')),
   nombre text not null check (char_length(nombre) between 1 and 80), contenido text not null check (char_length(contenido) between 1 and 1500),
   unique(user_id,id), unique(user_id,clave)
 );
@@ -154,6 +155,7 @@ begin
   insert into public.perfiles(user_id,nombre,slug,email_contacto,vence_el,activo)
   values(new.id,'Mi salón',v_slug,new.email,(now() at time zone 'America/Asuncion')::date + 7,true)
   on conflict(user_id) do nothing;
+  insert into public.plantillas(user_id,clave,nombre,contenido) values(new.id,'agradecimiento','Agradecimiento y reseña','Gracias por venir, {nombre} 💕 ¿Nos dejás una reseña? {resena}') on conflict(user_id,clave) do nothing;
   return new;
 end $$;
 drop trigger if exists auth_user_crea_perfil on auth.users;
@@ -526,7 +528,8 @@ grant usage on schema public to anon, authenticated;
 grant select,insert,update,delete on public.perfiles,public.clientas,public.servicios,public.turnos,public.pagos,public.plantillas,public.gastos,public.productos,public.empleadas,public.solicitudes_reserva,public.pagos_suscripcion,public.fotos_clienta to authenticated;
 -- Las notas internas y los campos de administración se leen solo por las RPC seguras.
 revoke select on public.perfiles from authenticated;
-grant select(user_id,nombre,slug,telefono,direccion,logo_url,color_principal,horario_texto,horarios,vence_el,activo,visitas_premio,premio_descripcion,telefono_soporte,onboarding_estado) on public.perfiles to authenticated;
+grant select(user_id,nombre,slug,telefono,direccion,logo_url,color_principal,horario_texto,horarios,vence_el,activo,visitas_premio,premio_descripcion,telefono_soporte,onboarding_estado,google_review_url) on public.perfiles to authenticated;
+grant update(google_review_url) on public.perfiles to authenticated;
 grant execute on function public.registrar_pago_turno(uuid,bigint,date,text,text) to authenticated;
 grant execute on function public.resolver_solicitud_reserva(uuid,boolean) to authenticated;
 grant execute on function public.admin_dashboard() to authenticated;
