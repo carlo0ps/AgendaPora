@@ -64,7 +64,7 @@ export function applyTheme(theme) {
 }
 export function syncThemeFromStorage() {
   window.addEventListener('storage', event => {
-    if (event.key === 'mis-clientas-theme') applyTheme(event.newValue || 'light');
+    if (event.key === 'agendapora-theme') applyTheme(event.newValue || 'light');
   });
 }
 export function applyBrandColor(value, root = document.body) {

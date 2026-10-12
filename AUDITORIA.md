@@ -1,4 +1,4 @@
-# Auditoría de Mis Clientas
+# Auditoría de AgendaPorã
 
 Fecha: 11/10/2026. Revisión del código fuente, pantallas locales, service worker y esquema Supabase.
 
@@ -20,7 +20,7 @@ Fecha: 11/10/2026. Revisión del código fuente, pantallas locales, service work
 
 7. **La importación de cumpleaños solo comprobaba el formato con una expresión regular, no que la fecha existiera, y no reconocía `dd/mm/aaaa`.** [js/app.js](js/app.js) ahora acepta `dd/mm/aaaa` y `aaaa-mm-dd`, valida el calendario y rechaza filas con fechas, teléfonos o correos inválidos antes de insertar. También valida nombres obligatorios, teléfonos de clientas/equipo y horarios semanales; limita los mensajes editables a 1500 caracteres.
 8. **El botón de cierre de sesión del admin descartaba la respuesta de Supabase.** [js/admin.js](js/admin.js) ahora maneja y muestra errores, y presenta estado de carga durante el cierre.
-9. **El service worker seguía en v5 y borraba cualquier caché del mismo origen al activar.** [sw.js](sw.js) usa `mis-clientas-shell-v6` y elimina solamente versiones anteriores de su propio caché. Conserva network-first, `skipWaiting()`, `clients.claim()` y el bypass de llamadas a Supabase.
+9. **El service worker seguía en v5 y borraba cualquier caché del mismo origen al activar.** [sw.js](sw.js) ahora usa `agendapora-shell-v10` y elimina solamente versiones anteriores de su propio caché. Conserva network-first, `skipWaiting()`, `clients.claim()` y el bypass de llamadas a Supabase.
 
 La revisión de seguridad no encontró una política RLS que permitiera cruzar salones ni una RPC pública que devolviera datos personales. Se confirmó en [supabase/schema.sql](supabase/schema.sql) que las lecturas propias siguen habilitadas tras el vencimiento, que las escrituras dependen de `cuenta_activa()`, que los campos administrativos del perfil están protegidos y que las RPC privilegiadas fijan `search_path`. Las fotos usan carpetas privadas por UID; los endpoints públicos de reservas exponen servicios y horarios, no los datos de turnos existentes. No se encontró una clave `service_role` en el código.
 

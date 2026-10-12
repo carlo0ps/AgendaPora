@@ -1,4 +1,4 @@
--- Mis Clientas · esquema inicial multi-tenant para Supabase.
+-- AgendaPorã · esquema inicial multi-tenant para Supabase.
 -- Ejecutar en SQL Editor como postgres. Todas las funciones privilegiadas fijan un search_path vacío.
 
 create schema if not exists extensions;
@@ -193,7 +193,7 @@ create trigger perfiles_proteger_campos before update on public.perfiles for eac
 create or replace function public.proteger_saldo_clienta()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
-  if auth.uid() is not null and not public.es_admin() and current_setting('mis_clientas.internal_recalculation',true) is distinct from 'on' then
+  if auth.uid() is not null and not public.es_admin() and current_setting('agendapora.internal_recalculation',true) is distinct from 'on' then
     if tg_op='INSERT' and (new.deuda_gs<>0 or new.visitas<>0) then raise exception 'La deuda y las visitas se calculan desde turnos y pagos' using errcode='42501'; end if;
     if tg_op='UPDATE' and (new.deuda_gs is distinct from old.deuda_gs or new.visitas is distinct from old.visitas) then raise exception 'La deuda y las visitas se calculan desde turnos y pagos' using errcode='42501'; end if;
   end if;
@@ -227,9 +227,9 @@ begin
     left join (select p.turno_id,sum(p.monto_gs) as total_pagado from public.pagos p where p.user_id=p_user_id and p.clienta_id=p_clienta_id group by p.turno_id) pg
       on pg.turno_id=t.id
     where t.user_id=p_user_id and t.clienta_id=p_clienta_id and t.estado='hecho';
-  perform pg_catalog.set_config('mis_clientas.internal_recalculation','on',true);
+  perform pg_catalog.set_config('agendapora.internal_recalculation','on',true);
   update public.clientas set visitas=v_visitas,deuda_gs=v_deuda where user_id=p_user_id and id=p_clienta_id;
-  perform pg_catalog.set_config('mis_clientas.internal_recalculation','off',true);
+  perform pg_catalog.set_config('agendapora.internal_recalculation','off',true);
 end $$;
 create or replace function public.turno_recalcula_cliente()
 returns trigger language plpgsql security definer set search_path = '' as $$

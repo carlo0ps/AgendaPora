@@ -1,4 +1,4 @@
-name: Deploy Mis Clientas to GitHub Pages
+name: Deploy AgendaPorã to GitHub Pages
 
 on:
   push:

@@ -173,7 +173,7 @@ function showAdmin() {
 }
 
 function init() {
-  applyTheme(localStorage.getItem('mis-clientas-theme') || 'light');
+  applyTheme(localStorage.getItem('agendapora-theme') || 'light');
   syncThemeFromStorage();
   $('#salons-list').setAttribute('tabindex', '0');
   $('#salons-list').setAttribute('role', 'region');

@@ -119,7 +119,7 @@ async function submit(ev) {
   }
 }
 async function init() {
-  applyTheme(localStorage.getItem('mis-clientas-theme') || 'light');
+  applyTheme(localStorage.getItem('agendapora-theme') || 'light');
   syncThemeFromStorage();
   try {
     if (!salonSlug || salonSlug.length > 80) throw new Error('Falta el enlace del salón. Pedile el link de reservas a tu peluquera.');

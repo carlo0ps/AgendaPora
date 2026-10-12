@@ -1,11 +1,11 @@
--- DEMO únicamente. Crear antes en Supabase Auth el usuario demo@mis-clientas.test.
+-- DEMO únicamente. Crear antes en Supabase Auth el usuario demo@agendapora.test.
 -- Repetir el script reemplaza los datos de ese usuario demo; no toca otras cuentas.
 begin;
 do $$
 declare v_user uuid;
 begin
-  select id into v_user from auth.users where email='demo@mis-clientas.test' limit 1;
-  if v_user is null then raise exception 'Creá demo@mis-clientas.test en Authentication antes de ejecutar este seed'; end if;
+  select id into v_user from auth.users where email='demo@agendapora.test' limit 1;
+  if v_user is null then raise exception 'Creá demo@agendapora.test en Authentication antes de ejecutar este seed'; end if;
   if not exists(select 1 from public.perfiles where user_id=v_user) then raise exception 'Ejecutá schema.sql primero para crear el perfil'; end if;
 
   delete from public.fotos_clienta where user_id=v_user;
@@ -19,7 +19,7 @@ begin
   delete from public.servicios where user_id=v_user;
   delete from public.clientas where user_id=v_user;
 
-  update public.perfiles set nombre='Bella Luna Estudio',slug='bella-luna-demo',email_contacto='demo@mis-clientas.test',
+  update public.perfiles set nombre='Bella Luna Estudio',slug='bella-luna-demo',email_contacto='demo@agendapora.test',
     telefono='0000000000',direccion='Villa Morra · Asunción',color_principal='#a84462',horario_texto='Lun a sáb · 08:00 a 18:00',
     horarios='{"1":{"inicio":"08:00","fin":"18:00"},"2":{"inicio":"08:00","fin":"18:00"},"3":{"inicio":"08:00","fin":"18:00"},"4":{"inicio":"08:00","fin":"18:00"},"5":{"inicio":"08:00","fin":"18:00"},"6":{"inicio":"08:00","fin":"16:00"}}'::jsonb,
     vence_el=(now() at time zone 'America/Asuncion')::date+90,activo=true,visitas_premio=8,premio_descripcion='Brushing de regalo'

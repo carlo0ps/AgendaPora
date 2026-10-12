@@ -214,7 +214,7 @@ function setBrand() {
 
 function setTheme(theme) {
   applyTheme(theme);
-  localStorage.setItem('mis-clientas-theme', theme);
+  localStorage.setItem('agendapora-theme', theme);
 }
 
 function appInstalled() {
@@ -248,7 +248,7 @@ async function installApp() {
   try {
     await promptEvent.prompt();
     const choice = await promptEvent.userChoice;
-    if (choice?.outcome === 'accepted') toast('Mis Clientas se está instalando.', 'success');
+    if (choice?.outcome === 'accepted') toast('AgendaPorã se está instalando.', 'success');
   } catch (error) {
     toast(requestError(error), 'error');
   }
@@ -265,8 +265,8 @@ function setSubscription() {
   alert.classList.remove('expired','deactivated');
   const support = SUPPORT_WHATSAPP || profile?.telefono_soporte || '';
   const supportMessage = profile?.activo === false
-    ? `Hola, la cuenta del salón ${salonName()} está desactivada. Necesito ayuda con el acceso a Mis Clientas.`
-    : `Hola, quiero renovar Mis Clientas para el salón ${salonName()}.`;
+    ? `Hola, la cuenta del salón ${salonName()} está desactivada. Necesito ayuda con el acceso a AgendaPorã.`
+    : `Hola, quiero renovar AgendaPorã para el salón ${salonName()}.`;
   const contactLabel = profile?.activo === false ? 'Contactar a soporte por WhatsApp' : 'Renovar por WhatsApp';
   const contact = `<a href="${e(waLink(support,supportMessage))}" target="_blank" rel="noopener">${contactLabel}</a>`;
   if (profile?.activo === false) {
@@ -1479,13 +1479,13 @@ async function saveProfile(ev) {
 }
 async function backupJSON() {
   const payload = {
-    respaldo: 'Mis Clientas',
+    respaldo: 'AgendaPorã',
     exportado_en: new Date().toISOString(),
     salon: salonName(),
     perfil: state.profile,
     tablas: state.data
   };
-  downloadFile(`mis-clientas-${salonSlug()}-${dateInput()}.json`, JSON.stringify(payload, null, 2), 'application/json');
+  downloadFile(`agendapora-${salonSlug()}-${dateInput()}.json`, JSON.stringify(payload, null, 2), 'application/json');
   toast('Respaldo JSON descargado');
 }
 
@@ -1588,7 +1588,7 @@ async function showBlocked() {
     : `Tu suscripción venció el ${datePY(profile?.vence_el)}`;
   const expiry = profile?.vence_el ? datePY(profile.vence_el) : 'sin fecha registrada';
   $('#blocked-renew').href = waLink(SUPPORT_WHATSAPP,
-    `Hola, quiero renovar Mis Clientas para el salón ${salonName()}. Fecha de vencimiento: ${expiry}.`);
+    `Hola, quiero renovar AgendaPorã para el salón ${salonName()}. Fecha de vencimiento: ${expiry}.`);
   if (!state.exportLoaded) {
     try { await loadLockedExportData(); }
     catch { state.exportLoaded = false; }
@@ -1605,8 +1605,8 @@ async function exportBlockedData() {
     const csvValue = value => value && typeof value === 'object' ? JSON.stringify(value) : value;
     const csv = [columns.map(csvEscape).join(','), ...records.map(row => columns.map(key => csvEscape(csvValue(row[key]))).join(','))].join('\r\n');
     const date = dateInput();
-    downloadFile(`mis-clientas-${salonSlug()}-${date}.csv`, csv, 'text/csv;charset=utf-8');
-    downloadFile(`mis-clientas-${salonSlug()}-${date}.json`, JSON.stringify({ respaldo: 'Mis Clientas', exportado_en: new Date().toISOString(), salon: salonName(), vence_el: state.profile?.vence_el || null, tablas: backup }, null, 2), 'application/json');
+    downloadFile(`agendapora-${salonSlug()}-${date}.csv`, csv, 'text/csv;charset=utf-8');
+    downloadFile(`agendapora-${salonSlug()}-${date}.json`, JSON.stringify({ respaldo: 'AgendaPorã', exportado_en: new Date().toISOString(), salon: salonName(), vence_el: state.profile?.vence_el || null, tablas: backup }, null, 2), 'application/json');
     toast('Se descargaron el CSV y el JSON de clientas, turnos, pagos y gastos.');
   } catch (error) {
     toast(`No se pudieron exportar los datos: ${requestError(error)}`, 'error');
@@ -1792,8 +1792,8 @@ async function requestPasswordReset(ev) {
 
 async function init() {
   syncThemeFromStorage();
-  setTheme(localStorage.getItem('mis-clientas-theme') || 'light');
-  $('#support-login').href = waLink(SUPPORT_WHATSAPP, 'Hola, necesito ayuda con Mis Clientas.');
+  setTheme(localStorage.getItem('agendapora-theme') || 'light');
+  $('#support-login').href = waLink(SUPPORT_WHATSAPP, 'Hola, necesito ayuda con AgendaPorã.');
   $('#forgot-password-link').addEventListener('click', ev => { ev.preventDefault(); showPasswordRequest(); });
   $('#password-back-login').addEventListener('click', ev => {
     ev.preventDefault();
@@ -1894,7 +1894,7 @@ async function init() {
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (serviceWorkerReloading) return;
       serviceWorkerReloading = true;
-      const reloadKey = 'mis-clientas-sw-reload-pending';
+      const reloadKey = 'agendapora-sw-reload-pending';
       if (sessionStorage.getItem(reloadKey) === '1') {
         sessionStorage.removeItem(reloadKey);
         return;
@@ -1902,8 +1902,8 @@ async function init() {
       sessionStorage.setItem(reloadKey, '1');
       location.reload();
     });
-    if (sessionStorage.getItem('mis-clientas-sw-reload-pending') === '1') {
-      sessionStorage.removeItem('mis-clientas-sw-reload-pending');
+    if (sessionStorage.getItem('agendapora-sw-reload-pending') === '1') {
+      sessionStorage.removeItem('agendapora-sw-reload-pending');
     }
     navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(() => {});
   }

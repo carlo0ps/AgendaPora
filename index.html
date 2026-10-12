@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content=""><meta name="description" content="Tu salón organizado: clientas, agenda, cobros y reservas en un solo lugar.">
-  <title>Mis Clientas · Tu salón en orden</title><link rel="manifest" href="manifest.json"><link rel="icon" href="icons/icon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/style.css">
+  <title>AgendaPorã · Tu salón en orden</title><link rel="manifest" href="manifest.json"><link rel="icon" href="icons/icon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/style.css">
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
   <div id="toast-region" class="toast-region" aria-live="polite"></div>
   <section id="login-screen" class="login-screen">
-    <div class="login-card"><img class="brand-mark" src="icons/icon.svg" alt=""><p class="eyebrow">Tu salón, más organizado</p><h1>Mis Clientas</h1><p class="muted">Ingresá a tu espacio de trabajo.</p>
+    <div class="login-card"><img class="brand-mark" src="icons/icon.svg" alt=""><p class="eyebrow">Tu salón, más organizado</p><h1>AgendaPorã</h1><p class="muted">Ingresá a tu espacio de trabajo.</p>
       <form id="login-form"><label for="login-email">Correo electrónico</label><input id="login-email" type="email" autocomplete="username" required>
         <label for="login-password">Contraseña</label><input id="login-password" type="password" autocomplete="current-password" required minlength="8">
         <button class="button primary full" type="submit">Ingresar</button><p id="login-error" class="form-error" role="alert"></p>
@@ -20,7 +20,7 @@
   <section id="password-screen" class="login-screen hidden" aria-labelledby="password-screen-title">
     <div class="login-card">
       <img class="brand-mark" src="icons/icon.svg" alt="">
-      <p class="eyebrow">Mis Clientas</p><h1 id="password-screen-title">Recuperar contraseña</h1>
+      <p class="eyebrow">AgendaPorã</p><h1 id="password-screen-title">Recuperar contraseña</h1>
       <div id="password-request-panel">
         <p class="muted">Ingresá tu correo y te enviaremos instrucciones si la cuenta puede recuperarse.</p>
         <form id="password-request-form">
@@ -44,7 +44,7 @@
   <section id="blocked-screen" class="locked-screen hidden" aria-labelledby="blocked-title">
     <div class="locked-card">
       <img class="brand-mark" src="icons/icon.svg" alt="">
-      <p class="eyebrow">Mis Clientas</p>
+      <p class="eyebrow">AgendaPorã</p>
       <h1 id="blocked-title">Acceso pausado</h1>
       <h2 id="blocked-salon-name"></h2>
       <p id="blocked-message" class="muted" role="status"></p>
@@ -56,7 +56,7 @@
     </div>
   </section>
   <div id="app-shell" class="app-shell hidden">
-    <aside class="sidebar"><a class="brand" href="#inicio"><img id="brand-logo" src="icons/icon.svg" alt=""><span><strong id="brand-name">Mis Clientas</strong><small>Gestión para salones</small></span></a>
+    <aside class="sidebar"><a class="brand" href="#inicio"><img id="brand-logo" src="icons/icon.svg" alt=""><span><strong id="brand-name">AgendaPorã</strong><small>Gestión para salones</small></span></a>
       <nav id="side-nav" class="side-nav" aria-label="Principal"></nav>
       <div class="sidebar-bottom"><button id="install-button" class="button soft full" type="button" data-install-app>Instalar app</button><a id="public-booking-link" class="button ghost full" target="_blank" rel="noopener">Ver reservas públicas</a><button id="theme-toggle" class="button ghost full">Cambiar tema</button><button id="logout-button" class="button ghost full">Salir</button><span class="tiny muted">America/Asuncion · Gs.</span></div>
     </aside>
@@ -77,7 +77,7 @@
       </div>
     </div>
   </dialog>
-  <dialog id="modal" class="modal"><div class="modal-frame"><header class="modal-head"><div><p class="eyebrow" id="modal-kicker">Mis Clientas</p><h2 id="modal-title">Formulario</h2></div><button class="icon-button" type="button" data-modal-close aria-label="Cerrar">×</button></header><div id="modal-body" class="modal-body"></div><footer id="modal-footer" class="modal-footer"></footer></div></dialog>
+  <dialog id="modal" class="modal"><div class="modal-frame"><header class="modal-head"><div><p class="eyebrow" id="modal-kicker">AgendaPorã</p><h2 id="modal-title">Formulario</h2></div><button class="icon-button" type="button" data-modal-close aria-label="Cerrar">×</button></header><div id="modal-body" class="modal-body"></div><footer id="modal-footer" class="modal-footer"></footer></div></dialog>
   <dialog id="onboarding-dialog" class="modal onboarding-modal" aria-labelledby="onboarding-title" aria-describedby="onboarding-description">
     <div class="modal-frame">
       <header class="modal-head onboarding-head"><div><p class="eyebrow">Primeros pasos</p><h2 id="onboarding-title">Prepará tu salón</h2></div><button class="icon-button" type="button" data-onboarding-skip aria-label="Omitir configuración">×</button></header>

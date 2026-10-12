@@ -1,4 +1,4 @@
-# Mis Clientas
+# AgendaPorã
 
 CRM, agenda y reservas para peluquerías y salones de belleza. Interfaz en español de Paraguay, moneda en guaraníes, instalada como PWA y alojada como archivos estáticos. Cada salón es una cuenta Supabase Auth y el aislamiento se aplica en PostgreSQL con RLS.
 
@@ -14,7 +14,7 @@ En **SQL Editor → New query**, pegá el contenido completo de [`supabase/schem
 
 Si ya tenías una instalación anterior, ejecutá también [`supabase/migracion_01.sql`](supabase/migracion_01.sql), [`supabase/migracion_02.sql`](supabase/migracion_02.sql) y [`supabase/migracion_03.sql`](supabase/migracion_03.sql), cada una desde **SQL Editor → New query**, y confirmá que termine con `Success`. La 01 reemplaza la RPC de cobro para registrar el pago y renovar la cuenta en una transacción; la 02 agrega el estado persistente del asistente; y la 03 excluye perfiles administradores de la lista, contadores y MRR del panel, además de mantener siempre activa la cuenta administradora para `index.html`. Las tres son idempotentes. En una instalación nueva, `schema.sql` ya incluye estos cambios. Si todavía falta la migración 02, la app permite abrir los datos existentes y avisa que el asistente espera esa actualización.
 
-Para llenar una cuenta de demostración, primero creá en Authentication un usuario dedicado con el correo reservado `demo@mis-clientas.test`. Después ejecutá [`supabase/seed_demo.sql`](supabase/seed_demo.sql). El seed reemplaza únicamente los datos de ese usuario demo y agrega veinte clientas ficticias, servicios, turnos, pagos, gastos, stock y una solicitud pendiente. Los teléfonos son números ficticios no operativos y los correos usan dominios reservados de prueba.
+Para llenar una cuenta de demostración, primero creá en Authentication un usuario dedicado con el correo reservado `demo@agendapora.test`. Después ejecutá [`supabase/seed_demo.sql`](supabase/seed_demo.sql). El seed reemplaza únicamente los datos de ese usuario demo y agrega veinte clientas ficticias, servicios, turnos, pagos, gastos, stock y una solicitud pendiente. Los teléfonos son números ficticios no operativos y los correos usan dominios reservados de prueba.
 
 ### 3. Verificar Storage
 
@@ -123,7 +123,7 @@ En el plan gratuito, Supabase puede pausar proyectos con poca actividad de base 
 
 **Mensaje para WhatsApp:**
 
-> Hola, ¿cómo estás? Estoy probando Mis Clientas, una agenda para peluquerías donde podés ordenar turnos, fichas e historial de tus clientas, controlar pagos y compartir un link para recibir reservas. Te muestro una demo corta con datos de ejemplo y, si te sirve, tenés 7 días para probarlo. ¿Qué día te queda cómodo?
+> Hola, ¿cómo estás? Estoy probando AgendaPorã, una agenda para peluquerías donde podés ordenar turnos, fichas e historial de tus clientas, controlar pagos y compartir un link para recibir reservas. Te muestro una demo corta con datos de ejemplo y, si te sirve, tenés 7 días para probarlo. ¿Qué día te queda cómodo?
 
 ## Decisiones
 

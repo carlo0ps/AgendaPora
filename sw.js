@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'mis-clientas-shell-v9';
+const CACHE_VERSION = 'agendapora-shell-v10';
 const SHELL = [
   './', './index.html', './admin.html', './reservar.html', './offline.html',
   './manifest.json', './css/style.css', './js/config.js', './js/utils.js',
@@ -17,7 +17,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key.startsWith('mis-clientas-shell-') && key !== CACHE_VERSION).map(key => caches.delete(key))))
+      .then(keys => Promise.all(keys.filter(key => key.startsWith('agendapora-shell-') && key !== CACHE_VERSION).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
@@ -41,18 +41,18 @@ self.addEventListener('fetch', event => {
   if (!isAppShellRequest(request, url)) return;
 
   event.respondWith((async () => {
+    const cache = await caches.open(CACHE_VERSION);
     try {
       const response = await fetch(request, { cache: 'no-store' });
       if (response.ok && response.type !== 'opaque') {
-        const cache = await caches.open(CACHE_VERSION);
         await cache.put(request, response.clone());
       }
       return response;
     } catch {
-      const cached = await caches.match(request, { ignoreSearch: true });
+      const cached = await cache.match(request, { ignoreSearch: true });
       if (cached) return cached;
       if (request.mode === 'navigate') {
-        return (await caches.match('./offline.html')) || Response.error();
+        return (await cache.match('./offline.html')) || Response.error();
       }
       return Response.error();
     }
