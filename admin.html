@@ -1,24 +1,34 @@
-<!doctype html><html lang="es-PY"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content=""><script>
-    (() => {
-      const cleanLegacyWorker = async () => {
-        if (navigator.serviceWorker) {
-          const registrations = await navigator.serviceWorker.getRegistrations().catch(() => []);
-          await Promise.all(registrations.map(registration => registration.unregister().catch(() => false)));
-        }
-        if (document.readyState !== 'complete') {
-          await new Promise(resolve => window.addEventListener('load', resolve, { once: true }));
-        }
-        await new Promise(resolve => setTimeout(resolve, 100));
-        if ('caches' in window) {
-          const keys = await caches.keys().catch(() => []);
-          await Promise.all(keys.map(key => caches.delete(key).catch(() => false)));
-        }
-        const currentUrl = new URL(location.href);
-        if (currentUrl.searchParams.get('__agendapora_worker_retired') === '1') {
-          currentUrl.searchParams.delete('__agendapora_worker_retired');
-          history.replaceState(history.state, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
-        }
-      };
-      cleanLegacyWorker().catch(() => {});
-    })();
-  </script><title>Administración · AgendaPorã</title><link rel="stylesheet" href="css/style.css"><link rel="icon" href="icons/icon.svg" type="image/svg+xml"><script type="module" src="js/admin.js"></script></head><body class="admin-page"><div id="toast-region" class="toast-region" aria-live="polite"></div><main class="admin-main"><header class="admin-header"><a href="index.html" class="brand"><img src="icons/icon.svg" alt=""><span><strong>AgendaPorã</strong><small>Administración</small></span></a><button id="admin-logout" class="button ghost hidden">Cerrar sesión</button></header><section id="admin-login" class="login-card admin-login"><p class="eyebrow">Acceso restringido</p><h1>Panel de administración</h1><form id="admin-login-form"><label for="admin-email">Correo</label><input id="admin-email" type="email" required autocomplete="username"><label for="admin-password">Contraseña</label><input id="admin-password" type="password" required autocomplete="current-password"><button class="button primary full">Ingresar</button><p id="admin-error" class="form-error" role="alert"></p></form></section><section id="admin-content" class="hidden"><div id="admin-summary" class="metrics-grid"></div><div class="section-heading"><div><p class="eyebrow">Cuentas</p><h2>Salones</h2></div><button id="admin-refresh" class="button soft">Actualizar</button></div><div id="salons-list" class="table-wrap"></div></section></main><dialog id="admin-modal" class="modal"><div class="modal-frame"><header class="modal-head"><h2 id="admin-modal-title">Cuenta</h2><button class="icon-button" type="button" data-modal-close aria-label="Cerrar">×</button></header><div id="admin-modal-body" class="modal-body"></div><footer id="admin-modal-footer" class="modal-footer"></footer></div></dialog></body></html>
+<!doctype html><html lang="es-PY"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#a84462"><title>Administración · AgendaPorã</title><link rel="stylesheet" href="css/style.css"><link rel="icon" href="icons/icon.svg" type="image/svg+xml"><script type="module" src="js/admin.js"></script></head><body class="admin-page"><div id="toast-region" class="toast-region" aria-live="polite"></div><main class="admin-main"><header class="admin-header"><a href="index.html" class="brand"><img src="icons/icon.svg" alt=""><span><strong>AgendaPorã</strong><small>Administración</small></span></a><button id="admin-logout" class="button ghost hidden">Cerrar sesión</button></header><section id="admin-login" class="login-card admin-login"><p class="eyebrow">Acceso restringido</p><h1>Panel de administración</h1><form id="admin-login-form"><label for="admin-email">Correo</label><input id="admin-email" type="email" required autocomplete="username"><label for="admin-password">Contraseña</label><input id="admin-password" type="password" required autocomplete="current-password"><button class="button primary full">Ingresar</button><p id="admin-error" class="form-error" role="alert"></p></form></section><section id="admin-content" class="hidden"><div id="admin-summary" class="metrics-grid"></div>
+      <section class="admin-pricing" aria-labelledby="admin-pricing-title">
+        <header class="admin-pricing-header">
+          <div><p class="eyebrow">Oferta comercial</p><h2 id="admin-pricing-title">Planes y precios</h2></div>
+          <p class="muted">Tarifas para nuevas altas de AgendaPorã.</p>
+        </header>
+        <div class="admin-price-grid">
+          <article class="admin-plan-card admin-plan-pilot">
+            <span class="admin-plan-tag">Cupos limitados · 5 salones</span>
+            <h3>Piloto</h3>
+            <p class="admin-plan-price">Gs. 40.000 <small>/ mes</small></p>
+            <ul><li>Para las primeras 5 peluqueras o salones que se sumen al piloto.</li><li>Precio de por vida.</li><li>Carga inicial gratis.</li><li>A cambio de un testimonio y una opinión honesta.</li></ul>
+          </article>
+          <article class="admin-plan-card">
+            <span class="admin-plan-tag">Plan mensual</span>
+            <h3>Precio normal</h3>
+            <p class="admin-plan-price">Gs. 150.000 <small>instalación única</small></p>
+            <p class="admin-plan-note">Incluye la carga inicial de hasta 100 clientas.</p>
+            <p class="admin-plan-price admin-plan-price-secondary">Gs. 60.000 <small>/ mes</small></p>
+          </article>
+          <article class="admin-plan-card">
+            <span class="admin-plan-tag">2 meses gratis</span>
+            <h3>Plan anual</h3>
+            <p class="admin-plan-price">Gs. 600.000 <small>/ año</small></p>
+            <p class="admin-plan-note">Equivale a pagar 10 meses en vez de 12 y ahorrar Gs. 120.000 frente al plan mensual.</p>
+            <p class="admin-plan-note">Para nuevas altas, la instalación de Gs. 150.000 se cobra aparte.</p>
+          </article>
+        </div>
+        <aside class="admin-payment-terms" aria-label="Condiciones de cobro">
+          <strong>Cobro siempre por adelantado.</strong>
+          <span>Aceptá transferencia bancaria, Tigo Money o efectivo.</span>
+        </aside>
+      </section>
+      <div class="section-heading"><div><p class="eyebrow">Cuentas</p><h2>Salones</h2></div><button id="admin-refresh" class="button soft">Actualizar</button></div><div id="salons-list" class="table-wrap"></div></section></main><dialog id="admin-modal" class="modal"><div class="modal-frame"><header class="modal-head"><h2 id="admin-modal-title">Cuenta</h2><button class="icon-button" type="button" data-modal-close aria-label="Cerrar">×</button></header><div id="admin-modal-body" class="modal-body"></div><footer id="admin-modal-footer" class="modal-footer"></footer></div></dialog></body></html>

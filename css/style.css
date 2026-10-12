@@ -305,6 +305,14 @@ font-weight:650}
 background:var(--primary-soft);
 color:var(--text);
 text-decoration:none}
+.install-nav-button {
+border:0;
+background:var(--transparent);
+font:inherit;
+color:var(--text-muted)}
+.install-nav-button:hover {
+background:var(--primary-soft);
+color:var(--text)}
 .nav-icon {
 width:1.3rem;
 text-align:center;
@@ -819,6 +827,17 @@ grid-template-columns:repeat(4,minmax(0,1fr))}
 .salon-card {
 padding:1rem;
 border-bottom:1px solid var(--border)}
+.offline-card {
+min-height:100vh;
+display:flex;
+align-items:center;
+justify-content:center;
+flex-direction:column;
+text-align:center;
+padding:2rem}
+.offline-card p {
+max-width:360px;
+color:var(--text-muted)}
 .loading-panel {
 min-height:120px;
 display:flex;
@@ -973,4 +992,106 @@ right:.75rem}
 max-width:none}
 .topbar h1 {
 font-size:1.45rem}
+}
+
+
+.admin-pricing {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+.admin-pricing-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.admin-pricing-header h2,
+.admin-plan-card h3 { margin: 0; }
+.admin-pricing-header p { margin: .25rem 0 0; }
+.admin-price-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: .85rem;
+}
+.admin-plan-card {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg);
+}
+.admin-plan-pilot {
+  border-color: var(--primary-fill);
+  background: var(--primary-soft);
+}
+.admin-plan-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  margin-bottom: .65rem;
+  padding: .25rem .6rem;
+  border-radius: 99px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: .75rem;
+  font-weight: 750;
+}
+.admin-plan-card h3 { margin-bottom: .65rem; }
+.admin-plan-price {
+  margin: 0 0 .65rem;
+  color: var(--primary);
+  font-size: clamp(1.3rem, 2vw, 1.7rem);
+  font-weight: 800;
+  line-height: 1.2;
+}
+.admin-plan-price small {
+  display: inline-block;
+  color: var(--text-muted);
+  font-size: .78rem;
+  font-weight: 650;
+}
+.admin-plan-price-secondary {
+  margin-top: .8rem;
+  padding-top: .8rem;
+  border-top: 1px solid var(--border);
+}
+.admin-plan-note {
+  margin: .35rem 0;
+  color: var(--text-muted);
+  font-size: .88rem;
+  line-height: 1.5;
+}
+.admin-plan-card ul {
+  display: grid;
+  gap: .4rem;
+  margin: .75rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--text-muted);
+  font-size: .88rem;
+  line-height: 1.45;
+}
+.admin-payment-terms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem .6rem;
+  padding: .85rem 1rem;
+  border: 1px solid var(--warning-border);
+  border-radius: 12px;
+  background: var(--warning-surface);
+  color: var(--text);
+  line-height: 1.5;
+}
+@media (max-width: 900px) {
+  .admin-price-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .admin-pricing { padding: .9rem; }
+  .admin-pricing-header { align-items: flex-start; flex-direction: column; }
+  .admin-price-grid { grid-template-columns: 1fr; }
 }

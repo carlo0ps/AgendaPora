@@ -1,6 +1,6 @@
 # AgendaPorã
 
-CRM, agenda y reservas para peluquerías y salones de belleza. Interfaz en español de Paraguay, moneda en guaraníes y disponible desde navegadores móviles y de escritorio como archivos estáticos. Cada salón es una cuenta Supabase Auth y el aislamiento se aplica en PostgreSQL con RLS.
+CRM, agenda y reservas para peluquerías y salones de belleza. Interfaz en español de Paraguay, moneda en guaraníes, instalada como PWA y alojada como archivos estáticos. Cada salón es una cuenta Supabase Auth y el aislamiento se aplica en PostgreSQL con RLS.
 
 ## Instalación paso a paso
 
@@ -84,6 +84,10 @@ gh api --method POST repos/USUARIO/REPOSITORIO/pages -f build_type=workflow
 
 La URL aparece en **Settings → Pages** y en la ejecución exitosa de Actions. No se requieren secretos de deploy.
 
+
+### Instalar AgendaPorã en el dispositivo
+
+La app se publica con manifiesto y service worker. Abrí `index.html` desde la URL HTTPS de GitHub Pages e iniciá sesión; el botón **Instalar app** aparece en la barra lateral en PC, en el menú y la navegación móvil, y en **Mi salón**. En Chrome o Edge, tocá el botón para abrir el aviso nativo o usá el ícono de instalar en la barra de direcciones. En Android/Chrome, si el aviso todavía no aparece, abrí **Menú ⋮ → Instalar app / Agregar a pantalla de inicio**. En iPhone o iPad, abrí el sitio en Safari y seguí **Compartir → Agregar a inicio**. La instalación necesita HTTPS; `localhost` también es un contexto seguro para desarrollo.
 ### 9. Dar de alta un salón y cobrar la suscripción
 
 1. En **Supabase → Authentication → Users → Add user**, creá el acceso de la peluquera y confirmá su correo. El trigger crea su perfil y vencimiento de prueba a siete días.
@@ -111,7 +115,7 @@ En el plan gratuito, Supabase puede pausar proyectos con poca actividad de base 
 
 ### 12. Cómo vender
 
-**Precio inicial sugerido:** probar Gs. 79.000/mes para las primeras peluqueras y Gs. 99.000/mes como tarifa estándar, con prueba de siete días y sin permanencia. Es una hipótesis de salida, no un precio validado: como referencia pública al preparar esta guía, un producto local mostraba Gs. 120.200/mes y otro desde Gs. 220.000/mes ([Salonware](https://salonware.app/paraguay/), [YP Software](https://www.ypsoftware.com.py/estetica/)). Confirmá precios, funcionalidades y condiciones actuales antes de comparar; ofrecé el precio más bajo si el soporte y la disponibilidad todavía están en etapa inicial.
+**Precios vigentes:** piloto para los primeros 5 salones: Gs. 40.000/mes de por vida, con carga inicial gratis a cambio de un testimonio y una opinión honesta. El plan normal cuesta Gs. 150.000 por la instalación (incluye carga inicial de hasta 100 clientas) más Gs. 60.000/mes. El plan anual cuesta Gs. 600.000 por 12 meses (equivale a 2 meses gratis); la instalación se cobra aparte en nuevas altas. Todos los planes se cobran por adelantado por transferencia, Tigo Money o efectivo.
 
 **Demo en cuatro minutos:**
 
@@ -134,7 +138,7 @@ En el plan gratuito, Supabase puede pausar proyectos con poca actividad de base 
 - Las visitas de fidelización cuentan turnos marcados como hechos. El premio se informa cada múltiplo de la meta configurada.
 - Los horarios públicos usan bloques de 15 minutos, respetan duración de servicio y excluyen turnos y solicitudes pendientes que se solapan. Se ofrecen fechas hasta 90 días adelante y se evalúan en `America/Asuncion`.
 - Las fotos son privadas y se muestran mediante URL firmadas con expiración de 30 minutos; los logos son públicos para que aparezcan en reservas.
-- Al abrir index.html, admin.html o reservar.html, la aplicación elimina registros de workers y cachés antiguos del navegador. Los datos privados siempre requieren conexión con Supabase.
+- El service worker solo guarda el shell estático. Supabase Auth, RPC, REST y Storage no se guardan en caché; trabajar con datos privados requiere conexión.
 - Los recordatorios abren WhatsApp sin API. La usuaria marca el envío manualmente porque el navegador no puede confirmar si el mensaje se envió desde WhatsApp.
 - GitHub Pages sirve la aplicación; Supabase sigue siendo el backend. No se guarda una service-role key en el repositorio.
 
