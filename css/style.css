@@ -1216,3 +1216,23 @@ font-size:1.45rem}
   .agenda-view-toggle { width: 100%; }
   .agenda-toolbar .agenda-view-toggle > .button { flex: 1; }
 }
+
+
+@media (max-width: 560px) {
+  .cash-print-area,
+  .cash-print-area > * {min-width:0;max-width:100%}
+  .cash-print-area .cash-metrics {grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cash-print-area .cash-metrics .metric-card {min-width:0;padding:.7rem .75rem}
+  .cash-print-area .cash-metrics .metric-card:last-child {grid-column:1/-1}
+  .cash-print-area .cash-metrics .metric-value {font-size:clamp(1rem,5vw,1.3rem);overflow-wrap:anywhere}
+  .cash-print-area .content-grid {grid-template-columns:minmax(0,1fr)}
+  .cash-print-area .table-wrap {max-width:100%;overflow-x:hidden}
+  .cash-print-area table {min-width:0;table-layout:fixed}
+  .cash-print-area th,
+  .cash-print-area td {padding:.55rem .35rem;font-size:.73rem;overflow-wrap:anywhere}
+  .cash-print-area .section-heading {flex-wrap:wrap;align-items:flex-start}
+  .cash-print-area .section-heading .button-group {width:100%}
+  .cash-print-area .section-heading .button-group .button {flex:1;min-width:44px}
+  .cash-print-area .toolbar {flex-wrap:wrap;align-items:flex-start}
+  .cash-print-area #cash-date {width:100%;min-width:0}
+}
