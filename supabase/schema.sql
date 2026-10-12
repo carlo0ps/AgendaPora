@@ -64,6 +64,8 @@ create table if not exists public.turnos (
   id uuid primary key default gen_random_uuid(), user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   created_at timestamptz not null default now(), clienta_id uuid, servicio_id uuid, empleada_id uuid,
   fecha date not null, hora time not null, precio_gs bigint not null default 0 check (precio_gs >= 0),
+  precio_cierre_gs bigint check (precio_cierre_gs is null or precio_cierre_gs >= 0),
+  comision_pct_aplicada numeric(5,2) check (comision_pct_aplicada is null or comision_pct_aplicada between 0 and 100),
   estado text not null default 'pendiente' check (estado in ('pendiente','hecho','cancelado')),
   notas text check (notas is null or char_length(notas) <= 2000), nombre_publico text, telefono_publico text, agradecido_at timestamptz,
   constraint turnos_clienta_fk foreign key(user_id,clienta_id) references public.clientas(user_id,id) on delete set null (clienta_id),
@@ -135,6 +137,7 @@ create index if not exists servicios_user_activo_idx on public.servicios(user_id
 create index if not exists turnos_user_fecha_hora_idx on public.turnos(user_id, fecha, hora);
 create index if not exists turnos_user_clienta_fecha_idx on public.turnos(user_id, clienta_id, fecha desc);
 create index if not exists pagos_user_fecha_idx on public.pagos(user_id, fecha);
+create index if not exists pagos_user_turno_idx on public.pagos(user_id,turno_id);
 create index if not exists pagos_user_clienta_idx on public.pagos(user_id, clienta_id);
 create index if not exists gastos_user_fecha_idx on public.gastos(user_id, fecha desc);
 create index if not exists productos_user_nombre_idx on public.productos(user_id, nombre);

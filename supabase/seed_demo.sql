@@ -50,12 +50,14 @@ begin
   ) as n(i,nombre);
 
   -- Catorce turnos en fechas distintas muestran historial, caja y agenda sin solapamientos.
-  insert into public.turnos(user_id,clienta_id,servicio_id,empleada_id,fecha,hora,precio_gs,estado,notas)
+  insert into public.turnos(user_id,clienta_id,servicio_id,empleada_id,fecha,hora,precio_gs,estado,notas,precio_cierre_gs,comision_pct_aplicada)
   select v_user,c.id,s.id,e.id,
     (now() at time zone 'America/Asuncion')::date + case when g.i<=8 then -(g.i*3) else (g.i-8)*2 end,
     time '09:00' + ((g.i%4)*interval '90 minutes'),s.precio_gs,
     case when g.i<=8 then 'hecho' else 'pendiente' end,
-    case when g.i=2 then 'Fórmula: 6.3 + reflejo dorado, oxidante 20 vol.' else null end
+    case when g.i=2 then 'Fórmula: 6.3 + reflejo dorado, oxidante 20 vol.' else null end,
+    case when g.i<=8 then s.precio_gs else null end,
+    case when g.i<=8 then e.comision_pct else null end
   from generate_series(1,14) g(i)
   join public.clientas c on c.user_id=v_user and c.nombre=(array['Ana Martínez','Lucía González','Sofía Benítez','Micaela López','Valentina Giménez','Camila Fernández','Julieta Rojas','María Duarte','Carolina Acosta','Belén Vera','Milagros Ramírez','Agustina Ortiz','Paola Ferreira','Nadia Villalba'])[g.i]
   join public.servicios s on s.user_id=v_user and s.nombre=(array['Corte y brushing','Coloración completa','Balayage','Manicura semipermanente','Tratamiento capilar'])[((g.i-1)%5)+1]

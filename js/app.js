@@ -691,47 +691,149 @@ function renderReactivation() {
   return `${heading('Volver a conectar','Reactivación')}<div class="toolbar"><label class="field"><span class="tiny muted">Sin venir por</span><select id="reactivate-days"><option value="30" ${days===30?'selected':''}>30 días</option><option value="60" ${days===60?'selected':''}>60 días</option><option value="90" ${days===90?'selected':''}>90 días</option></select></label></div>${table(['Clienta','Teléfono','Última visita','Saldo',''],rows)}`;
 }
 
+function summarizeCashClose(cash) {
+  const date = cash.date;
+  const appointments = Array.isArray(cash.appointments) ? cash.appointments : [];
+  const payments = Array.isArray(cash.payments) ? cash.payments : [];
+  const servicePayments = Array.isArray(cash.servicePayments) ? cash.servicePayments : payments;
+  const expenses = Array.isArray(cash.expenses) ? cash.expenses : [];
+  const completed = appointments.filter(appointment => appointment.estado === 'hecho');
+  const paymentTotals = new Map();
+  for (const payment of servicePayments) {
+    paymentTotals.set(payment.turno_id, (paymentTotals.get(payment.turno_id) || 0) + Number(payment.monto_gs || 0));
+  }
+  const methods = ['Efectivo', 'Transferencia', 'Tigo Money'];
+  const byMethod = Object.fromEntries(methods.map(method => [method,
+    payments.filter(payment => payment.medio === method).reduce((sum, payment) => sum + Number(payment.monto_gs || 0), 0)
+  ]));
+  const otherPayments = payments.filter(payment => !methods.includes(payment.medio) && payment.medio !== 'Deuda')
+    .reduce((sum, payment) => sum + Number(payment.monto_gs || 0), 0);
+  const debtGenerated = completed.reduce((sum, appointment) =>
+    sum + Math.max(0, Number(appointment.precio_cierre_gs ?? appointment.precio_gs ?? 0) - (paymentTotals.get(appointment.id) || 0)), 0);
+  const debtPaid = payments.filter(payment => {
+    const related = Array.isArray(payment.turno) ? payment.turno[0] : payment.turno;
+    return Boolean(related?.fecha && related.fecha < date);
+  }).reduce((sum, payment) => sum + Number(payment.monto_gs || 0), 0);
+  const expensesTotal = expenses.reduce((sum, expense) => sum + Number(expense.monto_gs || 0), 0);
+  const collected = Object.values(byMethod).reduce((sum, amount) => sum + amount, 0) + otherPayments;
+  const services = new Map();
+  const employees = new Map();
+  for (const appointment of completed) {
+    const serviceId = appointment.servicio_id || 'sin-servicio';
+    const serviceName = serviceById(appointment.servicio_id)?.nombre || 'Servicio';
+    const service = services.get(serviceId) || { name: serviceName, count: 0, total: 0 };
+    service.count += 1;
+    service.total += Number(appointment.precio_cierre_gs ?? appointment.precio_gs ?? 0);
+    services.set(serviceId, service);
+
+    if (appointment.empleada_id) {
+      const employee = employeeById(appointment.empleada_id);
+      const commissionRate = Number(appointment.comision_pct_aplicada ?? employee?.comision_pct ?? 0);
+      const commission = Math.round(Number(appointment.precio_cierre_gs ?? appointment.precio_gs ?? 0) * commissionRate / 100);
+      const employeeSummary = employees.get(appointment.empleada_id) || { name: employee?.nombre || 'Empleada', total: 0, count: 0 };
+      employeeSummary.total += commission;
+      employeeSummary.count += 1;
+      employees.set(appointment.empleada_id, employeeSummary);
+    }
+  }
+  return { date, appointments, completed, payments, expenses, byMethod, otherPayments, debtGenerated, debtPaid, expensesTotal, collected, net: collected - expensesTotal, services, employees };
+}
+
 function renderCashClose() {
-  const cash=state.cashData, date=state.cashDate;
-  if(state.cashError) return `${heading('Cierre de caja','Control diario')}<div class="toolbar"><label class="field"><span class="tiny muted">Fecha del cierre</span><input id="cash-date" type="date" value="${e(date)}"></label></div><section class="panel" role="alert"><p>${e(state.cashError)}</p><button class="button primary" data-action="refresh-cash">Reintentar</button></section>`;
-  if(!cash) return `${heading('Cierre de caja','Control diario')}<div class="toolbar"><label class="field"><span class="tiny muted">Fecha del cierre</span><input id="cash-date" type="date" value="${e(date)}"></label><span class="muted">${state.cashLoading?'Cargando movimientos…':'Seleccioná un día para consultar los movimientos.'}</span></div>`;
-  const methods=['Efectivo','Transferencia','Tigo Money'];
-  const byMethod=Object.fromEntries(methods.map(m=>[m,cash.payments.filter(p=>p.medio===m).reduce((n,p)=>n+Number(p.monto_gs),0)]));
-  const debtGenerated=cash.appointments.filter(a=>a.estado==='hecho').reduce((sum,a)=>sum+Math.max(0,Number(a.precio_gs)-cash.payments.filter(p=>p.turno_id===a.id).reduce((n,p)=>n+Number(p.monto_gs),0)),0);
-  const appointmentIds=new Set(cash.appointments.map(a=>a.id));
-  const debtPaid=cash.payments.filter(p=>!appointmentIds.has(p.turno_id)).reduce((n,p)=>n+Number(p.monto_gs),0);
-  const total=Object.values(byMethod).reduce((a,b)=>a+b,0),expenses=cash.expenses.reduce((n,x)=>n+Number(x.monto_gs),0);
-  const serviceGroups=new Map(),employeeGroups=new Map();
-  for(const a of cash.appointments.filter(x=>x.estado==='hecho')) { const service=serviceById(a.servicio_id)?.nombre||'Servicio'; const current=serviceGroups.get(service)||{count:0,total:0};current.count++;current.total+=Number(a.precio_gs);serviceGroups.set(service,current);const emp=employeeById(a.empleada_id)?.nombre||'Sin empleada', amount=Math.round(Number(a.precio_gs)*Number(employeeById(a.empleada_id)?.comision_pct||0)/100);employeeGroups.set(emp,(employeeGroups.get(emp)||0)+amount); }
-  const serviceRows=[...serviceGroups].map(([name,item])=>`<tr><td>${e(name)}</td><td>${item.count}</td><td>${money(item.total)}</td></tr>`).join('');
-  const employeeRows=[...employeeGroups].map(([name,amount])=>`<tr><td>${e(name)}</td><td>${money(amount)}</td></tr>`).join('');
-  return `<div class="cash-print-area">${heading('Cierre de caja','Control diario',`<div class="button-group"><button class="button soft" data-action="cash-print">Imprimir</button><button class="button ghost" data-action="cash-whatsapp">Enviar por WhatsApp</button></div>`)}<div class="toolbar no-print"><label class="field"><span class="tiny muted">Fecha del cierre</span><input id="cash-date" type="date" value="${e(date)}"></label><span class="muted">${cash.appointments.filter(a=>a.estado==='hecho').length} turnos realizados</span></div><h2 class="cash-date-title">${e(datePY(date))} · ${e(salonName())}</h2><div class="metrics-grid cash-metrics">${metric('Efectivo',money(byMethod.Efectivo),'')}${metric('Transferencia',money(byMethod.Transferencia),'')}${metric('Tigo Money',money(byMethod['Tigo Money']),'')}${metric('Deuda generada',money(debtGenerated),'')}${metric('Abonos de deuda',money(debtPaid),'')}${metric('Gastos',money(expenses),'')}${metric('Neto',money(total-expenses),'Cobrado − gastos')}</div><div class="content-grid"><section class="panel cash-breakdown-panel"><h2>Servicios realizados</h2><div class="cash-breakdown-list">${serviceRows}</div></section><section class="panel cash-breakdown-panel"><h2>Comisiones por empleada</h2><div class="cash-breakdown-list">${employeeRows}</div></section><section class="panel cash-breakdown-panel"><h2>Gastos del día</h2><div class="cash-breakdown-list">${expenseRows}</div></section></div></div>`;
+  const cash = state.cashData;
+  const date = state.cashDate;
+  if (state.cashError) return `${heading('Cierre de caja', 'Control diario')}<div class="toolbar"><label class="field"><span class="tiny muted">Fecha del cierre</span><input id="cash-date" type="date" value="${e(date)}"></label></div><section class="panel" role="alert"><p>${e(state.cashError)}</p><button class="button primary" data-action="refresh-cash">Reintentar</button></section>`;
+  if (!cash) return `${heading('Cierre de caja', 'Control diario')}<div class="toolbar"><label class="field"><span class="tiny muted">Fecha del cierre</span><input id="cash-date" type="date" value="${e(date)}"></label><span class="muted" role="status">${state.cashLoading ? 'Cargando movimientos…' : 'Seleccioná un día para consultar los movimientos.'}</span></div>`;
+
+  const summary = summarizeCashClose(cash);
+  const serviceRows = [...summary.services.values()]
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'))
+    .map(item => `<div class="cash-breakdown-row"><div><strong>${e(item.name)}</strong><small>${item.count} ${item.count === 1 ? 'turno' : 'turnos'}</small></div><strong class="cash-breakdown-amount">${money(item.total)}</strong></div>`).join('')
+    || empty('Sin servicios', 'No hay turnos realizados en esta fecha.');
+  const employeeRows = [...summary.employees.values()]
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'))
+    .map(item => `<div class="cash-breakdown-row"><div><strong>${e(item.name)}</strong><small>${item.count} ${item.count === 1 ? 'turno' : 'turnos'}</small></div><strong class="cash-breakdown-amount">${money(item.total)}</strong></div>`).join('')
+    || empty('Sin comisiones', 'No hay turnos realizados con empleada asignada en esta fecha.');
+  const expenseRows = summary.expenses
+    .map(item => `<div class="cash-breakdown-row"><div><strong>${e(item.concepto)}</strong><small>${e(item.categoria || 'Gasto del día')}</small></div><strong class="cash-breakdown-amount">${money(item.monto_gs)}</strong></div>`).join('')
+    || empty('Sin gastos', 'No hay gastos registrados en esta fecha.');
+  const otherMetric = summary.otherPayments ? metric('Otros cobros', money(summary.otherPayments), '') : '';
+
+  return `<div class="cash-print-area">${heading('Cierre de caja', 'Control diario', `<div class="button-group"><button class="button soft" data-action="cash-print">Imprimir</button><button class="button ghost" data-action="cash-whatsapp">Enviar por WhatsApp</button></div>`)}
+    <div class="toolbar no-print"><label class="field"><span class="tiny muted">Fecha del cierre</span><input id="cash-date" type="date" value="${e(summary.date)}"></label><span class="muted">${summary.completed.length} ${summary.completed.length === 1 ? 'turno realizado' : 'turnos realizados'}</span></div>
+    <h2 class="cash-date-title">${e(datePY(summary.date))} · ${e(salonName())}</h2>
+    <div class="metrics-grid cash-metrics">${metric('Efectivo', money(summary.byMethod.Efectivo), '')}${metric('Transferencia', money(summary.byMethod.Transferencia), '')}${metric('Tigo Money', money(summary.byMethod['Tigo Money']), '')}${otherMetric}${metric('Deuda generada', money(summary.debtGenerated), '')}${metric('Abonos de deuda', money(summary.debtPaid), '')}${metric('Gastos', money(summary.expensesTotal), '')}${metric('Neto', money(summary.net), 'Cobrado − gastos')}</div>
+    <div class="content-grid cash-breakdown-grid"><section class="panel cash-breakdown-panel"><h2>Servicios realizados</h2><div class="cash-breakdown-list">${serviceRows}</div></section><section class="panel cash-breakdown-panel"><h2>Comisiones por empleada</h2><div class="cash-breakdown-list">${employeeRows}</div></section><section class="panel cash-breakdown-panel"><h2>Gastos del día</h2><div class="cash-breakdown-list">${expenseRows}</div></section></div>
+  </div>`;
 }
 
 async function loadCashClose(date, force = false) {
-  if(!date||state.cashLoading&&!force) return;
-  const requestId=++state.cashLoadId;
-  state.cashLoading=true; state.cashError=''; state.cashData=null; if(state.view==='caja') applyView();
+  if (!date || (state.cashLoading && !force)) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    state.cashError = 'Seleccioná una fecha válida para el cierre.';
+    if (state.view === 'caja') applyView();
+    return;
+  }
+  const requestId = ++state.cashLoadId;
+  state.cashLoading = true;
+  state.cashError = '';
+  state.cashData = null;
+  if (state.view === 'caja') applyView();
   try {
-    const [appointmentsResult,paymentsResult,expensesResult]=await Promise.all([
-      supabase.from('turnos').select('id,clienta_id,servicio_id,empleada_id,fecha,hora,precio_gs,estado').eq('fecha',date).order('hora'),
-      supabase.from('pagos').select('id,turno_id,clienta_id,fecha,monto_gs,medio,nota').eq('fecha',date),
-      supabase.from('gastos').select('id,fecha,concepto,monto_gs').eq('fecha',date)
+    const [appointmentsResult, paymentsResult, expensesResult] = await Promise.all([
+      supabase.from('turnos').select('*').eq('fecha', date).order('hora'),
+      supabase.from('pagos')
+        .select('id,turno_id,clienta_id,fecha,monto_gs,medio,nota,turno:turnos!pagos_turno_fk(fecha)')
+        .eq('fecha', date),
+      supabase.from('gastos').select('id,fecha,concepto,categoria,monto_gs').eq('fecha', date)
     ]);
-    for(const result of [appointmentsResult,paymentsResult,expensesResult]) if(result.error) throw result.error;
-    if(requestId===state.cashLoadId) state.cashData={date,appointments:appointmentsResult.data||[],payments:paymentsResult.data||[],expenses:expensesResult.data||[]};
-  } catch(error) { if(requestId===state.cashLoadId) state.cashError=requestError(error); throw error;
-  } finally { if(requestId===state.cashLoadId) {state.cashLoading=false;if(state.view==='caja') applyView();} }
+    for (const result of [appointmentsResult, paymentsResult, expensesResult]) {
+      if (result.error) throw result.error;
+    }
+    const appointments = appointmentsResult.data || [];
+    const completedIds = appointments.filter(appointment => appointment.estado === 'hecho').map(appointment => appointment.id);
+    let servicePayments = [];
+    if (completedIds.length) {
+      const servicePaymentsResult = await supabase.from('pagos')
+        .select('turno_id,monto_gs').in('turno_id', completedIds);
+      if (servicePaymentsResult.error) throw servicePaymentsResult.error;
+      servicePayments = servicePaymentsResult.data || [];
+    }
+    if (requestId === state.cashLoadId) {
+      state.cashData = {
+        date,
+        appointments,
+        payments: paymentsResult.data || [],
+        servicePayments,
+        expenses: expensesResult.data || []
+      };
+    }
+  } catch (error) {
+    if (requestId === state.cashLoadId) state.cashError = requestError(error);
+  } finally {
+    if (requestId === state.cashLoadId) {
+      state.cashLoading = false;
+      if (state.view === 'caja') applyView();
+    }
+  }
 }
 
 function shareCashClose() {
-  if(!state.cashData) return toast('Esperá a que cargue el cierre.','error');
-  const {appointments,payments,expenses}=state.cashData,method=name=>payments.filter(p=>p.medio===name).reduce((n,p)=>n+Number(p.monto_gs),0);
-  const debt=appointments.filter(a=>a.estado==='hecho').reduce((sum,a)=>sum+Math.max(0,Number(a.precio_gs)-payments.filter(p=>p.turno_id===a.id).reduce((n,p)=>n+Number(p.monto_gs),0)),0);
-  const appointmentIds=new Set(appointments.map(a=>a.id)),debtPaid=payments.filter(p=>!appointmentIds.has(p.turno_id)).reduce((n,p)=>n+Number(p.monto_gs),0),costs=expenses.reduce((n,x)=>n+Number(x.monto_gs),0);
-  const gross=method('Efectivo')+method('Transferencia')+method('Tigo Money');
-  const text=`Cierre de caja · ${datePY(state.cashDate)} · ${salonName()}\nTurnos hechos: ${appointments.filter(a=>a.estado==='hecho').length}\nEfectivo: ${money(method('Efectivo'))}\nTransferencia: ${money(method('Transferencia'))}\nTigo Money: ${money(method('Tigo Money'))}\nDeuda generada: ${money(debt)}\nAbonos de deuda: ${money(debtPaid)}\nGastos: ${money(costs)}\nNeto cobrado − gastos: ${money(gross-costs)}`;
-  window.open(waLink('',text),'_blank','noopener');
+  if (!state.cashData) return toast('Esperá a que cargue el cierre.', 'error');
+  const summary = summarizeCashClose(state.cashData);
+  const lines = [
+    `Cierre de caja · ${datePY(summary.date)} · ${salonName()}`,
+    `Turnos hechos: ${summary.completed.length}`,
+    `Efectivo: ${money(summary.byMethod.Efectivo)}`,
+    `Transferencia: ${money(summary.byMethod.Transferencia)}`,
+    `Tigo Money: ${money(summary.byMethod['Tigo Money'])}`,
+    ...(summary.otherPayments ? [`Otros cobros: ${money(summary.otherPayments)}`] : []),
+    `Deuda generada: ${money(summary.debtGenerated)}`,
+    `Abonos de deuda: ${money(summary.debtPaid)}`,
+    `Gastos: ${money(summary.expensesTotal)}`,
+    `Neto cobrado − gastos: ${money(summary.net)}`
+  ];
+  window.open(waLink('', lines.join('\n')), '_blank', 'noopener');
 }
 
 function foldText(value) { return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es'); }

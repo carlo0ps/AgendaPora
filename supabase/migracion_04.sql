@@ -3,6 +3,8 @@
 begin;
 alter table public.perfiles add column if not exists google_review_url text;
 alter table public.turnos add column if not exists agradecido_at timestamptz;
+alter table public.turnos add column if not exists precio_cierre_gs bigint;
+alter table public.turnos add column if not exists comision_pct_aplicada numeric(5,2);
 do $$ begin
   if not exists(select 1 from pg_constraint where conrelid='public.perfiles'::regclass and conname='perfiles_google_review_url_check') then
     alter table public.perfiles add constraint perfiles_google_review_url_check check (google_review_url is null or (char_length(google_review_url)<=500 and google_review_url ~ '^https://'));
@@ -14,6 +16,7 @@ alter table public.plantillas add constraint plantillas_clave_check check (clave
 
 create index if not exists turnos_user_fecha_estado_idx on public.turnos(user_id,fecha,estado);
 create index if not exists pagos_user_fecha_medio_idx on public.pagos(user_id,fecha,medio);
+create index if not exists pagos_user_turno_idx on public.pagos(user_id,turno_id);
 create index if not exists gastos_user_fecha_idx on public.gastos(user_id,fecha);
 
 -- Permite la excepción de solapamiento solo dentro de RPCs autenticadas que validan tenant y suscripción.
@@ -89,26 +92,28 @@ end $$;
 
 create or replace function public.cobrar_turno_rapido(p_turno_id uuid,p_monto_gs bigint,p_fecha date,p_medio text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare v_user uuid:=auth.uid(); v_turno public.turnos%rowtype; v_pago uuid;
+declare v_user uuid:=auth.uid(); v_turno public.turnos%rowtype; v_pago uuid; v_comision numeric(5,2); v_precio bigint;
 begin
   if v_user is null or not public.cuenta_activa() then raise exception 'Cuenta sin acceso de escritura' using errcode='42501'; end if;
   select * into v_turno from public.turnos t where t.id=p_turno_id and t.user_id=v_user for update;
   if not found then raise exception 'Turno no encontrado' using errcode='P0002'; end if;
   if exists(select 1 from public.pagos p where p.user_id=v_user and p.turno_id=p_turno_id) then raise exception 'Este turno ya tiene un pago registrado' using errcode='23505'; end if;
   if p_fecha is null or p_medio is null or p_medio not in ('Efectivo','Transferencia','Tigo Money','Deuda') then raise exception 'Medio o fecha inválidos' using errcode='22023'; end if;
+  v_precio:=coalesce(v_turno.precio_cierre_gs,v_turno.precio_gs);
   if p_medio='Deuda' then
     if p_monto_gs is distinct from 0 then raise exception 'Para cargar a deuda no se recibe un monto' using errcode='22023'; end if;
-  elsif v_turno.precio_gs=0 then
+  elsif v_precio=0 then
     if p_monto_gs is distinct from 0 then raise exception 'Este servicio no tiene saldo para cobrar' using errcode='22023'; end if;
-  elsif p_monto_gs is null or p_monto_gs<=0 or p_monto_gs>v_turno.precio_gs then raise exception 'El monto cobrado debe ser mayor que cero y no superar el precio' using errcode='22023';
+  elsif p_monto_gs is null or p_monto_gs<=0 or p_monto_gs>v_precio then raise exception 'El monto cobrado debe ser mayor que cero y no superar el precio' using errcode='22023';
   end if;
+  v_comision:=coalesce((select e.comision_pct from public.empleadas e where e.user_id=v_user and e.id=v_turno.empleada_id),0);
   perform set_config('agendapora.quick_charge','on',true);
-  update public.turnos set estado='hecho' where id=p_turno_id and user_id=v_user;
+  update public.turnos set estado='hecho',precio_cierre_gs=coalesce(v_turno.precio_cierre_gs,v_turno.precio_gs),comision_pct_aplicada=coalesce(v_turno.comision_pct_aplicada,v_comision) where id=p_turno_id and user_id=v_user;
   if p_medio<>'Deuda' and p_monto_gs>0 then
     insert into public.pagos(user_id,turno_id,clienta_id,fecha,monto_gs,medio,nota)
       values(v_user,p_turno_id,v_turno.clienta_id,p_fecha,p_monto_gs,p_medio,'Cobro rápido') returning id into v_pago;
   end if;
-  return jsonb_build_object('turno_id',p_turno_id,'pago_id',v_pago,'monto_gs',coalesce(p_monto_gs,0),'deuda_gs',case when p_medio='Deuda' then v_turno.precio_gs else v_turno.precio_gs-p_monto_gs end);
+  return jsonb_build_object('turno_id',p_turno_id,'pago_id',v_pago,'monto_gs',coalesce(p_monto_gs,0),'deuda_gs',case when p_medio='Deuda' then v_precio else v_precio-p_monto_gs end);
 end $$;
 
 create or replace function public.anular_cobro_turno(p_turno_id uuid)
@@ -123,7 +128,7 @@ begin
   end if;
   delete from public.pagos where user_id=v_user and turno_id=p_turno_id;
   perform set_config('agendapora.undo_charge','on',true);
-  update public.turnos set estado='pendiente',agradecido_at=null where id=p_turno_id and user_id=v_user;
+  update public.turnos set estado='pendiente',agradecido_at=null,precio_cierre_gs=null,comision_pct_aplicada=null where id=p_turno_id and user_id=v_user;
 end $$;
 
 create or replace function public.marcar_agradecido(p_turno_id uuid)
