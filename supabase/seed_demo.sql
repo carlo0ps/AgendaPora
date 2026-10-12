@@ -1,11 +1,11 @@
--- DEMO únicamente. Crear antes en Supabase Auth el usuario demo@mis-clientas.local.
+-- DEMO únicamente. Crear antes en Supabase Auth el usuario demo@mis-clientas.test.
 -- Repetir el script reemplaza los datos de ese usuario demo; no toca otras cuentas.
 begin;
 do $$
 declare v_user uuid;
 begin
-  select id into v_user from auth.users where email='demo@mis-clientas.local' limit 1;
-  if v_user is null then raise exception 'Creá demo@mis-clientas.local en Authentication antes de ejecutar este seed'; end if;
+  select id into v_user from auth.users where email='demo@mis-clientas.test' limit 1;
+  if v_user is null then raise exception 'Creá demo@mis-clientas.test en Authentication antes de ejecutar este seed'; end if;
   if not exists(select 1 from public.perfiles where user_id=v_user) then raise exception 'Ejecutá schema.sql primero para crear el perfil'; end if;
 
   delete from public.fotos_clienta where user_id=v_user;
@@ -19,8 +19,8 @@ begin
   delete from public.servicios where user_id=v_user;
   delete from public.clientas where user_id=v_user;
 
-  update public.perfiles set nombre='Bella Luna Estudio',slug='bella-luna-demo',email_contacto='demo@mis-clientas.local',
-    telefono='0981 234 567',direccion='Villa Morra · Asunción',color_principal='#a84462',horario_texto='Lun a sáb · 08:00 a 18:00',
+  update public.perfiles set nombre='Bella Luna Estudio',slug='bella-luna-demo',email_contacto='demo@mis-clientas.test',
+    telefono='0000000000',direccion='Villa Morra · Asunción',color_principal='#a84462',horario_texto='Lun a sáb · 08:00 a 18:00',
     horarios='{"1":{"inicio":"08:00","fin":"18:00"},"2":{"inicio":"08:00","fin":"18:00"},"3":{"inicio":"08:00","fin":"18:00"},"4":{"inicio":"08:00","fin":"18:00"},"5":{"inicio":"08:00","fin":"18:00"},"6":{"inicio":"08:00","fin":"16:00"}}'::jsonb,
     vence_el=(now() at time zone 'America/Asuncion')::date+90,activo=true,visitas_premio=8,premio_descripcion='Brushing de regalo'
     where user_id=v_user;
@@ -29,7 +29,7 @@ begin
     (v_user,'Corte y brushing',85000,60,true),(v_user,'Coloración completa',260000,180,true),(v_user,'Balayage',480000,240,true),
     (v_user,'Manicura semipermanente',95000,75,true),(v_user,'Tratamiento capilar',150000,90,true);
   insert into public.empleadas(user_id,nombre,telefono,comision_pct,activa) values
-    (v_user,'Camila Benítez','0981 765 432',35,true),(v_user,'Micaela Rojas','0971 444 222',30,true);
+    (v_user,'Camila Benítez','0000000001',35,true),(v_user,'Micaela Rojas','0000000002',30,true);
   insert into public.plantillas(user_id,clave,nombre,contenido) values
     (v_user,'recordatorio','Recordatorio de turno','Hola {nombre} 😊 Te recuerdo tu turno en {salon} el {fecha} a las {hora}. ¡Te esperamos!'),
     (v_user,'deuda','Aviso de saldo','Hola {nombre}, tu saldo pendiente en {salon} es {deuda}.'),
@@ -38,7 +38,7 @@ begin
     (v_user,'reactivacion','Te extrañamos','Hola {nombre} 💖 Hace un tiempo no te vemos por {salon}. ¿Agendamos?');
 
   insert into public.clientas(user_id,nombre,telefono,email,fecha_nacimiento,notas)
-  select v_user,n.nombre,'0981 '||lpad((100000+i*371)::text,6,'0'),'clienta'||i||'@demo.test',
+  select v_user,n.nombre,'00000000'||lpad(i::text,2,'0'),'clienta'||i||'@demo.test',
     ((now() at time zone 'America/Asuncion')::date - ((i*13+28)%360)),
     case when i%4=0 then 'Fórmula habitual: tono castaño cálido. Confirmar alergias antes de aplicar.' else null end
   from (values
@@ -75,7 +75,7 @@ begin
     (v_user,'Oxidante 20 vol','litro',1,2,65000),(v_user,'Tinte castaño 6.3','tubo',5,3,42000),(v_user,'Shampoo hidratante','litro',2,2,95000),(v_user,'Guantes descartables','caja',7,2,28000);
 
   insert into public.solicitudes_reserva(user_id,servicio_id,fecha,hora,nombre,telefono)
-  select v_user,s.id,(now() at time zone 'America/Asuncion')::date+1,time '14:00','Brenda Demo','0981 555 010'
+  select v_user,s.id,(now() at time zone 'America/Asuncion')::date+1,time '14:00','Brenda Demo','0000000003'
   from public.servicios s where s.user_id=v_user and s.nombre='Corte y brushing';
 end $$;
 commit;

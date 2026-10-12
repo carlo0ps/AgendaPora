@@ -1,1 +1,16 @@
-{"name":"Mis Clientas · Gestión para salones","short_name":"Mis Clientas","description":"Clientas, agenda, pagos y reservas para salones de belleza.","lang":"es-PY","start_url":"./index.html","scope":"./","display":"standalone","background_color":"#fbf7f5","theme_color":"#a84462","icons":[{"src":"icons/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
+{
+  "name": "Mis Clientas · Gestión para salones",
+  "short_name": "Mis Clientas",
+  "description": "Clientas, agenda, pagos y reservas para salones de belleza.",
+  "lang": "es-PY",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fbf7f5",
+  "theme_color": "#a84462",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

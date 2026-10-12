@@ -25,8 +25,17 @@ create table if not exists public.perfiles (
   visitas_premio integer not null default 10 check (visitas_premio between 2 and 100),
   premio_descripcion text not null default 'Servicio o descuento especial',
   telefono_soporte text,
+  onboarding_estado text not null default 'pendiente',
   constraint perfiles_slug_formato check (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$')
 );
+
+-- Actualización idempotente para proyectos que ya tienen perfiles.
+alter table public.perfiles add column if not exists onboarding_estado text not null default 'pendiente';
+do $$ begin
+  if not exists (select 1 from pg_constraint where conrelid='public.perfiles'::regclass and conname='perfiles_onboarding_estado_check') then
+    alter table public.perfiles add constraint perfiles_onboarding_estado_check check (onboarding_estado in ('pendiente','omitido','completado'));
+  end if;
+end $$;
 
 create table if not exists public.clientas (
   id uuid primary key default gen_random_uuid(), user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
@@ -157,7 +166,9 @@ returns boolean language sql stable security definer set search_path = '' as $$
 $$;
 create or replace function public.cuenta_activa()
 returns boolean language sql stable security definer set search_path = '' as $$
-  select exists(select 1 from public.perfiles p where p.user_id = (select auth.uid()) and p.activo and p.vence_el >= (now() at time zone 'America/Asuncion')::date)
+  select exists(select 1 from public.perfiles p where p.user_id = (select auth.uid()) and (
+    p.es_admin or (p.activo and p.vence_el >= (now() at time zone 'America/Asuncion')::date)
+  ))
 $$;
 revoke all on function public.es_admin() from public, anon;
 revoke all on function public.cuenta_activa() from public, anon;
@@ -380,7 +391,7 @@ begin
   if not public.es_admin() then raise exception 'Solo administración' using errcode='42501'; end if;
   select count(*)::integer,count(*) filter(where p.activo and p.vence_el>=(now() at time zone 'America/Asuncion')::date)::integer,count(*) filter(where not p.activo or p.vence_el<(now() at time zone 'America/Asuncion')::date)::integer,
     coalesce(sum(p.precio_mensual_gs) filter(where p.activo and p.vence_el>=(now() at time zone 'America/Asuncion')::date and exists(select 1 from public.pagos_suscripcion ps where ps.user_id=p.user_id and ps.periodo_hasta>=(now() at time zone 'America/Asuncion')::date)),0)::bigint
-    into v_total,v_active,v_overdue,v_mrr from public.perfiles p where not p.es_admin;
+    into v_total,v_active,v_overdue,v_mrr from public.perfiles p where p.es_admin = false;
   return jsonb_build_object('total',v_total,'activas',v_active,'vencidas',v_overdue,'mrr_gs',v_mrr);
 end $$;
 create or replace function public.admin_list_salones()
@@ -393,7 +404,7 @@ begin
       (select count(*)::integer from public.clientas c where c.user_id=p.user_id) as cantidad_clientas,
       (select count(*)::integer from public.turnos t where t.user_id=p.user_id) as cantidad_turnos,
       (select max(ps.fecha) from public.pagos_suscripcion ps where ps.user_id=p.user_id) as ultimo_pago
-    from public.perfiles p where not p.es_admin
+    from public.perfiles p where p.es_admin = false
   ) x;
   return v_rows;
 end $$;
@@ -405,16 +416,37 @@ begin
   update public.perfiles set activo=p_activo,vence_el=p_vence_el,notas_internas=nullif(p_notas_internas,''),precio_mensual_gs=coalesce(p_precio_mensual_gs,precio_mensual_gs) where user_id=p_user_id and not es_admin;
   if not found then raise exception 'Salón no encontrado' using errcode='P0002'; end if;
 end $$;
-create or replace function public.admin_registrar_pago(p_user_id uuid,p_monto_gs bigint,p_fecha date,p_periodo_hasta date,p_nota text default null)
+-- Retirar cualquier versión anterior: PostgREST requiere nombres y tipos de argumentos exactos.
+do $$
+declare v_argumentos text;
+begin
+  for v_argumentos in
+    select pg_catalog.pg_get_function_identity_arguments(p.oid)
+    from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public' and p.proname='admin_registrar_pago' and p.prokind='f'
+  loop
+    execute pg_catalog.format('drop function public.admin_registrar_pago(%s)',v_argumentos);
+  end loop;
+end $$;
+create function public.admin_registrar_pago(p_user_id uuid,p_monto_gs bigint,p_fecha date,p_meses integer,p_nota text default null)
 returns uuid language plpgsql security definer set search_path = '' as $$
-declare v_id uuid;
+declare
+  v_id uuid;
+  v_hoy date := (pg_catalog.now() at time zone 'America/Asuncion')::date;
+  v_vence date;
 begin
   if not public.es_admin() then raise exception 'Solo administración' using errcode='42501'; end if;
-  if p_monto_gs<=0 or p_fecha is null or char_length(coalesce(p_nota,''))>1000 then raise exception 'Datos de pago inválidos' using errcode='22023'; end if;
-  if not exists(select 1 from public.perfiles where user_id=p_user_id and not es_admin) then raise exception 'Salón no encontrado' using errcode='P0002'; end if;
+  if p_monto_gs is null or p_monto_gs<=0 or p_fecha is null or p_meses is null or p_meses not between 1 and 12 or char_length(coalesce(p_nota,''))>1000 then
+    raise exception 'Datos de pago inválidos' using errcode='22023';
+  end if;
+  select vence_el into v_vence from public.perfiles where user_id=p_user_id and not es_admin for update;
+  if not found then raise exception 'Salón no encontrado' using errcode='P0002'; end if;
+  v_vence := (greatest(coalesce(v_vence,v_hoy),v_hoy)::timestamp + pg_catalog.make_interval(months => p_meses))::date;
   insert into public.pagos_suscripcion(user_id,monto_gs,fecha,periodo_hasta,nota_interna,registrado_por)
-    values(p_user_id,p_monto_gs,p_fecha,p_periodo_hasta,nullif(p_nota,''),auth.uid()) returning id into v_id;
-  if p_periodo_hasta is not null then update public.perfiles set vence_el=p_periodo_hasta,activo=true where user_id=p_user_id and not es_admin; end if;
+    values(p_user_id,p_monto_gs,p_fecha,v_vence,nullif(p_nota,''),auth.uid()) returning id into v_id;
+  update public.perfiles set vence_el=v_vence,activo=true where user_id=p_user_id and not es_admin;
+  if not found then raise exception 'Salón no encontrado' using errcode='P0002'; end if;
   return v_id;
 end $$;
 
@@ -494,13 +526,13 @@ grant usage on schema public to anon, authenticated;
 grant select,insert,update,delete on public.perfiles,public.clientas,public.servicios,public.turnos,public.pagos,public.plantillas,public.gastos,public.productos,public.empleadas,public.solicitudes_reserva,public.pagos_suscripcion,public.fotos_clienta to authenticated;
 -- Las notas internas y los campos de administración se leen solo por las RPC seguras.
 revoke select on public.perfiles from authenticated;
-grant select(user_id,nombre,slug,telefono,direccion,logo_url,color_principal,horario_texto,horarios,vence_el,activo,visitas_premio,premio_descripcion,telefono_soporte) on public.perfiles to authenticated;
+grant select(user_id,nombre,slug,telefono,direccion,logo_url,color_principal,horario_texto,horarios,vence_el,activo,visitas_premio,premio_descripcion,telefono_soporte,onboarding_estado) on public.perfiles to authenticated;
 grant execute on function public.registrar_pago_turno(uuid,bigint,date,text,text) to authenticated;
 grant execute on function public.resolver_solicitud_reserva(uuid,boolean) to authenticated;
 grant execute on function public.admin_dashboard() to authenticated;
 grant execute on function public.admin_list_salones() to authenticated;
 grant execute on function public.admin_update_salon(uuid,boolean,date,text,bigint) to authenticated;
-grant execute on function public.admin_registrar_pago(uuid,bigint,date,date,text) to authenticated;
+grant execute on function public.admin_registrar_pago(uuid,bigint,date,integer,text) to authenticated;
 grant execute on function public.public_info(text) to anon,authenticated;
 grant execute on function public.public_slots(text,date,uuid) to anon,authenticated;
 grant execute on function public.public_request_booking(text,uuid,date,time,text,text,text) to anon,authenticated;
@@ -509,7 +541,8 @@ revoke all on function public.resolver_solicitud_reserva(uuid,boolean) from publ
 revoke all on function public.admin_dashboard() from public,anon;
 revoke all on function public.admin_list_salones() from public,anon;
 revoke all on function public.admin_update_salon(uuid,boolean,date,text,bigint) from public,anon;
-revoke all on function public.admin_registrar_pago(uuid,bigint,date,date,text) from public,anon;
+revoke all on function public.admin_registrar_pago(uuid,bigint,date,integer,text) from public,anon;
+notify pgrst, 'reload schema';
 revoke all on function public.public_info(text) from public;
 revoke all on function public.public_slots(text,date,uuid) from public;
 revoke all on function public.public_request_booking(text,uuid,date,time,text,text,text) from public;

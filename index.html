@@ -2,7 +2,7 @@
 <html lang="es-PY">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#a84462"><meta name="description" content="Tu salón organizado: clientas, agenda, cobros y reservas en un solo lugar.">
+  <meta name="theme-color" content=""><meta name="description" content="Tu salón organizado: clientas, agenda, cobros y reservas en un solo lugar.">
   <title>Mis Clientas · Tu salón en orden</title><link rel="manifest" href="manifest.json"><link rel="icon" href="icons/icon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/style.css">
   <script type="module" src="js/app.js"></script>
 </head>
@@ -14,18 +14,76 @@
         <label for="login-password">Contraseña</label><input id="login-password" type="password" autocomplete="current-password" required minlength="8">
         <button class="button primary full" type="submit">Ingresar</button><p id="login-error" class="form-error" role="alert"></p>
       </form><p class="tiny muted">¿Necesitás ayuda? <a id="support-login" href="#">Escribinos por WhatsApp</a></p>
+      <p class="tiny"><a id="forgot-password-link" href="#recuperar">Olvidé mi contraseña</a></p>
     </div>
   </section>
-  <section id="blocked-screen" class="login-screen hidden"><div class="login-card"><img class="brand-mark" src="icons/icon.svg" alt=""><p class="eyebrow">Mis Clientas</p><h1>Tu espacio está pausado</h1><p id="blocked-message" class="muted">La suscripción venció o la cuenta está desactivada.</p><a id="renew-link" class="button primary full" href="#">Consultar renovación por WhatsApp</a><button id="blocked-logout" class="button ghost full">Cerrar sesión</button></div></section>
+  <section id="password-screen" class="login-screen hidden" aria-labelledby="password-screen-title">
+    <div class="login-card">
+      <img class="brand-mark" src="icons/icon.svg" alt="">
+      <p class="eyebrow">Mis Clientas</p><h1 id="password-screen-title">Recuperar contraseña</h1>
+      <div id="password-request-panel">
+        <p class="muted">Ingresá tu correo y te enviaremos instrucciones si la cuenta puede recuperarse.</p>
+        <form id="password-request-form">
+          <label for="recovery-email">Correo electrónico</label><input id="recovery-email" type="email" autocomplete="email" required maxlength="160">
+          <button class="button primary full" type="submit">Enviar instrucciones</button>
+          <p id="password-request-message" class="form-error" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+      <div id="password-update-panel" class="hidden">
+        <p class="muted">Elegí una contraseña nueva para tu cuenta.</p>
+        <form id="password-recovery-form">
+          <label for="recovery-password">Nueva contraseña</label><input id="recovery-password" type="password" autocomplete="new-password" minlength="8" required>
+          <label for="recovery-password-confirm">Confirmar contraseña</label><input id="recovery-password-confirm" type="password" autocomplete="new-password" minlength="8" required>
+          <button class="button primary full" type="submit">Guardar contraseña</button>
+          <p id="password-recovery-message" class="form-error" role="alert" aria-live="polite"></p>
+        </form>
+      </div>
+      <p class="tiny"><a id="password-back-login" href="#login">Volver al inicio de sesión</a></p>
+    </div>
+  </section>
+  <section id="blocked-screen" class="locked-screen hidden" aria-labelledby="blocked-title">
+    <div class="locked-card">
+      <img class="brand-mark" src="icons/icon.svg" alt="">
+      <p class="eyebrow">Mis Clientas</p>
+      <h1 id="blocked-title">Acceso pausado</h1>
+      <h2 id="blocked-salon-name"></h2>
+      <p id="blocked-message" class="muted" role="status"></p>
+      <div class="locked-actions">
+        <button id="blocked-export" class="button soft full" type="button">Exportar datos (CSV y JSON)</button>
+        <a id="blocked-renew" class="button primary full" href="#" target="_blank" rel="noopener">Renovar por WhatsApp</a>
+        <button id="blocked-logout" class="button ghost full" type="button">Cerrar sesión</button>
+      </div>
+    </div>
+  </section>
   <div id="app-shell" class="app-shell hidden">
     <aside class="sidebar"><a class="brand" href="#inicio"><img id="brand-logo" src="icons/icon.svg" alt=""><span><strong id="brand-name">Mis Clientas</strong><small>Gestión para salones</small></span></a>
       <nav id="side-nav" class="side-nav" aria-label="Principal"></nav>
-      <div class="sidebar-bottom"><button id="install-button" class="button soft full hidden">Instalar app</button><a id="public-booking-link" class="button ghost full" target="_blank" rel="noopener">Ver reservas públicas</a><button id="theme-toggle" class="button ghost full">Cambiar tema</button><button id="logout-button" class="button ghost full">Salir</button><span class="tiny muted">America/Asuncion · Gs.</span></div>
+      <div class="sidebar-bottom"><button id="install-button" class="button soft full" type="button" data-install-app>Instalar app</button><a id="public-booking-link" class="button ghost full" target="_blank" rel="noopener">Ver reservas públicas</a><button id="theme-toggle" class="button ghost full">Cambiar tema</button><button id="logout-button" class="button ghost full">Salir</button><span class="tiny muted">America/Asuncion · Gs.</span></div>
     </aside>
-    <main class="main-area"><header class="topbar"><button id="mobile-menu" class="icon-button" aria-label="Abrir menú">☰</button><div><p class="eyebrow" id="page-kicker">Tu espacio</p><h1 id="page-title">Inicio</h1></div><div class="topbar-actions"><span id="subscription-badge" class="status-pill"></span><button id="install-button-top" class="button soft hidden">Instalar</button></div></header>
+    <main class="main-area"><header class="topbar"><button id="mobile-menu" class="icon-button" type="button" aria-label="Abrir menú" aria-haspopup="dialog" aria-controls="mobile-menu-dialog" aria-expanded="false">☰</button><div><p class="eyebrow" id="page-kicker">Tu espacio</p><h1 id="page-title">Inicio</h1></div><div class="topbar-actions"><span id="subscription-badge" class="status-pill"></span><button id="install-button-top" class="button soft" type="button" data-install-app>Instalar</button><button id="logout-button-top" class="button ghost">Salir</button></div></header>
       <div id="subscription-alert" class="notice hidden"></div><section id="view-root" class="view-root" aria-live="polite"></section>
     </main>
     <nav id="bottom-nav" class="bottom-nav" aria-label="Navegación móvil"></nav>
   </div>
+  <dialog id="mobile-menu-dialog" class="mobile-menu-dialog" aria-labelledby="mobile-menu-title">
+    <div class="mobile-menu-frame">
+      <header class="mobile-menu-head"><h2 id="mobile-menu-title">Menú</h2><button class="icon-button" type="button" data-mobile-menu-close aria-label="Cerrar menú">×</button></header>
+      <nav id="mobile-menu-nav" class="mobile-menu-nav" aria-label="Todas las secciones"></nav>
+      <div class="mobile-menu-actions">
+        <button class="button soft full" type="button" data-install-app>Instalar app</button>
+        <a id="mobile-public-booking-link" class="button ghost full" target="_blank" rel="noopener">Ver reservas públicas</a>
+        <button id="mobile-theme-toggle" class="button ghost full" type="button">Cambiar tema</button>
+        <button id="mobile-logout-button" class="button ghost full" type="button">Cerrar sesión</button>
+      </div>
+    </div>
+  </dialog>
   <dialog id="modal" class="modal"><div class="modal-frame"><header class="modal-head"><div><p class="eyebrow" id="modal-kicker">Mis Clientas</p><h2 id="modal-title">Formulario</h2></div><button class="icon-button" type="button" data-modal-close aria-label="Cerrar">×</button></header><div id="modal-body" class="modal-body"></div><footer id="modal-footer" class="modal-footer"></footer></div></dialog>
+  <dialog id="onboarding-dialog" class="modal onboarding-modal" aria-labelledby="onboarding-title" aria-describedby="onboarding-description">
+    <div class="modal-frame">
+      <header class="modal-head onboarding-head"><div><p class="eyebrow">Primeros pasos</p><h2 id="onboarding-title">Prepará tu salón</h2></div><button class="icon-button" type="button" data-onboarding-skip aria-label="Omitir configuración">×</button></header>
+      <div class="onboarding-progress-wrap"><div class="onboarding-progress-meta"><span id="onboarding-step-label">Paso 1 de 4</span><span id="onboarding-progress-value">25%</span></div><progress id="onboarding-progress" max="4" value="1" aria-label="Progreso de configuración"></progress></div>
+      <div id="onboarding-description" class="modal-body onboarding-body"></div>
+      <footer class="modal-footer onboarding-footer"><button id="onboarding-skip" class="button ghost" type="button">Omitir</button><span class="onboarding-footer-spacer"></span><button id="onboarding-back" class="button ghost" type="button">Anterior</button><button id="onboarding-next" class="button primary" type="button">Continuar</button></footer>
+    </div>
+  </dialog>
 </body></html>

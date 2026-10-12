@@ -11,13 +11,19 @@ import {
   money,
   datePY,
   dateInput,
+  daysUntil,
   toast,
   requestError,
-  setBusy
+  setBusy,
+  noStoreFetch,
+  applyTheme,
+  syncThemeFromStorage
 } from './utils.js';
 
 let supabase;
 let salons = [];
+const SALON_PAGE_SIZE = 25;
+let salonPage = 0;
 
 function credentialsReady() {
   if (SUPABASE_URL === 'SUPABASE_URL' || SUPABASE_ANON_KEY === 'SUPABASE_ANON_KEY') throw new Error('Configurá Supabase en js/config.js antes de usar el panel.');
@@ -27,6 +33,9 @@ function credentialsReady() {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true
+    },
+    global: {
+      fetch: noStoreFetch
     }
   });
 }
@@ -48,12 +57,21 @@ function summaryHTML(data) {
 }
 
 function salonStatus(s) {
-  return s.activo && s.vence_el >= dateInput() ? 'Activa' : 'Vencida / pausada';
+  const remaining = daysUntil(s.vence_el);
+  return s.activo && remaining !== null && remaining >= 0 ? 'Activa' : 'Vencida / pausada';
 }
 
 function renderSalons() {
-  const rows = salons.map(s => `<tr><td><strong>${e(s.nombre)}</strong><small class="muted">${e(s.slug)}</small></td><td>${e(s.email_contacto||'—')}</td><td>${datePY(s.created_at)}</td><td>${s.ultimo_acceso?new Intl.DateTimeFormat('es-PY',{timeZone:'America/Asuncion',dateStyle:'short',timeStyle:'short'}).format(new Date(s.ultimo_acceso)):'Nunca'}</td><td>${Number(s.cantidad_clientas)} / ${Number(s.cantidad_turnos)}</td><td>${e(salonStatus(s))}<small class="muted"> vence ${datePY(s.vence_el)}</small></td><td>${s.ultimo_pago?datePY(s.ultimo_pago):'Sin pago'}</td><td><div class="table-actions"><button class="small-button primary" data-admin-action="edit" data-id="${e(s.user_id)}">Gestionar</button><button class="small-button" data-admin-action="payment" data-id="${e(s.user_id)}">Registrar pago</button></div></td></tr>`).join('');
-  $('#salons-list').innerHTML = rows ? `<table><thead><tr><th>Salón</th><th>Email</th><th>Alta</th><th>Último acceso</th><th>Clientas / turnos</th><th>Estado de cuenta</th><th>Último pago</th><th>Acciones</th></tr></thead><tbody>${rows}</tbody></table>` : `<div class="empty-state"><strong>Todavía no hay salones</strong><span>Las cuentas creadas en Supabase Auth aparecerán acá.</span></div>`;
+  if (!salons.length) {
+    $('#salons-list').innerHTML = `<div class="empty-state"><strong>Todavía no hay salones</strong><span>Las cuentas creadas en Supabase Auth aparecerán acá.</span></div>`;
+    return;
+  }
+  const pages = Math.ceil(salons.length / SALON_PAGE_SIZE);
+  salonPage = Math.min(salonPage, pages - 1);
+  const start = salonPage * SALON_PAGE_SIZE;
+  const rows = salons.slice(start, start + SALON_PAGE_SIZE).map(s => `<tr><td><strong>${e(s.nombre)}</strong><small class="muted">${e(s.slug)}</small></td><td>${e(s.email_contacto||'—')}</td><td>${datePY(s.created_at)}</td><td>${s.ultimo_acceso?new Intl.DateTimeFormat('es-PY',{timeZone:'America/Asuncion',dateStyle:'short',timeStyle:'short'}).format(new Date(s.ultimo_acceso)):'Nunca'}</td><td>${Number(s.cantidad_clientas)} / ${Number(s.cantidad_turnos)}</td><td>${e(salonStatus(s))}<small class="muted"> vence ${datePY(s.vence_el)}</small></td><td>${s.ultimo_pago?datePY(s.ultimo_pago):'Sin pago'}</td><td><div class="table-actions"><button class="small-button primary" data-admin-action="edit" data-id="${e(s.user_id)}">Gestionar</button><button class="small-button" data-admin-action="payment" data-id="${e(s.user_id)}">Registrar pago</button></div></td></tr>`).join('');
+  const pagination = pages <= 1 ? '' : `<nav id="salon-pagination" class="table-pagination" aria-label="Paginación de salones"><span aria-live="polite">Mostrando ${start + 1}–${Math.min(start + SALON_PAGE_SIZE, salons.length)} de ${salons.length}</span><div><button class="button ghost" type="button" data-admin-page="-1" ${salonPage===0?'disabled':''}>Anterior</button><span>Página ${salonPage + 1} de ${pages}</span><button class="button ghost" type="button" data-admin-page="1" ${salonPage + 1 >= pages?'disabled':''}>Siguiente</button></div></nav>`;
+  $('#salons-list').innerHTML = `<table><thead><tr><th>Salón</th><th>Email</th><th>Alta</th><th>Último acceso</th><th>Clientas / turnos</th><th>Estado de cuenta</th><th>Último pago</th><th>Acciones</th></tr></thead><tbody>${rows}</tbody></table>${pagination}`;
 }
 async function refresh() {
   const [dashboard, listing] = await Promise.all([supabase.rpc('admin_dashboard'), supabase.rpc('admin_list_salones')]);
@@ -61,6 +79,7 @@ async function refresh() {
   if (listing.error) throw listing.error;
   $('#admin-summary').innerHTML = summaryHTML(dashboard.data);
   salons = listing.data || [];
+  salonPage = Math.min(salonPage, Math.max(0, Math.ceil(salons.length / SALON_PAGE_SIZE) - 1));
   renderSalons();
 }
 
@@ -99,7 +118,14 @@ function editSalon(id) {
 function recordPayment(id) {
   const s = salons.find(x => x.user_id === id);
   if (!s) return;
-  openModal(`Registrar pago · ${s.nombre}`, `<form id="payment-form" class="form-grid"><label class="field">Monto recibido (Gs.)<input name="monto_gs" type="number" min="1" value="${Number(s.precio_mensual_gs)}" required></label><label class="field">Fecha del pago<input name="fecha" type="date" value="${new Intl.DateTimeFormat('en-CA',{timeZone:'America/Asuncion'}).format(new Date())}" required></label><label class="field wide">Extender acceso hasta<input name="periodo_hasta" type="date" value="${new Intl.DateTimeFormat('en-CA',{timeZone:'America/Asuncion'}).format(new Date(Date.now()+30*86400000))}" required></label><label class="field wide">Nota interna<textarea name="nota" maxlength="1000" rows="3"></textarea></label></form>`, `<button class="button ghost" type="button" data-modal-close>Cancelar</button><button class="button primary" type="button" id="save-payment">Registrar pago</button>`);
+  openModal(`Registrar pago · ${s.nombre}`, `<form id="payment-form" class="form-grid"><label class="field">Monto recibido (Gs.)<input name="monto_gs" type="number" min="1" value="${Number(s.precio_mensual_gs)}" required></label><label class="field">Fecha del pago<input name="fecha" type="date" value="${dateInput()}" required></label><label class="field wide">Meses de acceso<input name="meses" type="number" min="1" max="12" value="1" required><small class="muted">El nuevo vencimiento se calcula en el servidor desde la fecha vigente o la fecha de hoy.</small></label><label class="field wide">Nota interna<textarea name="nota" maxlength="1000" rows="3"></textarea></label></form>`, `<button class="button ghost" type="button" data-modal-close>Cancelar</button><button class="button primary" type="button" id="save-payment">Registrar pago</button>`);
+  const paymentForm = $('#payment-form');
+  paymentForm.elements.meses.addEventListener('input', () => {
+    if (paymentForm.elements.monto_gs.dataset.manual !== 'true') {
+      paymentForm.elements.monto_gs.value = Number(s.precio_mensual_gs) * Math.max(1, Number(paymentForm.elements.meses.value) || 1);
+    }
+  });
+  paymentForm.elements.monto_gs.addEventListener('input', () => { paymentForm.elements.monto_gs.dataset.manual = 'true'; });
   $('#save-payment').addEventListener('click', async ev => {
     const form = $('#payment-form');
     if (!form.reportValidity()) return;
@@ -113,13 +139,16 @@ function recordPayment(id) {
           p_user_id: id,
           p_monto_gs: Number(fd.get('monto_gs')),
           p_fecha: fd.get('fecha'),
-          p_periodo_hasta: fd.get('periodo_hasta'),
+          p_meses: Number(fd.get('meses')),
           p_nota: fd.get('nota') || null
         });
       if (error) throw error;
       $('#admin-modal').close();
-      toast('Pago registrado y vencimiento extendido');
       await refresh();
+      const updated = salons.find(salon => salon.user_id === id);
+      toast(updated
+        ? `Pago registrado. ${salonStatus(updated)} hasta ${datePY(updated.vence_el)}.`
+        : 'Pago registrado y vencimiento extendido.');
     } catch (error) {
       toast(requestError(error), 'error');
     } finally {
@@ -144,6 +173,11 @@ function showAdmin() {
 }
 
 function init() {
+  applyTheme(localStorage.getItem('mis-clientas-theme') || 'light');
+  syncThemeFromStorage();
+  $('#salons-list').setAttribute('tabindex', '0');
+  $('#salons-list').setAttribute('role', 'region');
+  $('#salons-list').setAttribute('aria-label', 'Lista de salones desplazable');
   $('#admin-login-form').addEventListener('submit', async ev => {
     ev.preventDefault();
     const b = ev.submitter;
@@ -169,12 +203,31 @@ function init() {
   });
   $('#admin-refresh').addEventListener('click', () => refresh().then(() => toast('Datos actualizados')).catch(error => toast(requestError(error), 'error')));
   $('#salons-list').addEventListener('click', ev => {
+    const pageButton = ev.target.closest('[data-admin-page]');
+    if (pageButton) {
+      const delta = Number(pageButton.dataset.adminPage);
+      salonPage = Math.max(0, Math.min(Math.ceil(salons.length / SALON_PAGE_SIZE) - 1, salonPage + delta));
+      renderSalons();
+      $(`#salon-pagination [data-admin-page="${delta}"]`)?.focus();
+      return;
+    }
     const b = ev.target.closest('[data-admin-action]');
     if (!b) return;
     if (b.dataset.adminAction === 'edit') editSalon(b.dataset.id);
     if (b.dataset.adminAction === 'payment') recordPayment(b.dataset.id);
   });
-  $('#admin-logout').addEventListener('click', () => supabase?.auth.signOut());
+  $('#admin-logout').addEventListener('click', async ev => {
+    const button = ev.currentTarget;
+    setBusy(button, true, 'Saliendo…');
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    } catch (error) {
+      toast(requestError(error), 'error');
+    } finally {
+      setBusy(button, false);
+    }
+  });
   document.addEventListener('click', ev => {
     if (ev.target.closest('[data-modal-close]')) ev.target.closest('dialog')?.close();
   });

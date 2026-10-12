@@ -13,7 +13,10 @@ import {
   toast,
   setBusy,
   requestError,
-  applyBrandColor
+  applyBrandColor,
+  noStoreFetch,
+  applyTheme,
+  syncThemeFromStorage
 } from './utils.js';
 
 let supabase, salonSlug = new URLSearchParams(location.search).get('salon'),
@@ -26,7 +29,8 @@ function config() {
       persistSession: false,
       autoRefreshToken: false,
       detectSessionInUrl: false
-    }
+    },
+    global: { fetch: noStoreFetch }
   });
 }
 async function loadSalon() {
@@ -115,6 +119,8 @@ async function submit(ev) {
   }
 }
 async function init() {
+  applyTheme(localStorage.getItem('mis-clientas-theme') || 'light');
+  syncThemeFromStorage();
   try {
     if (!salonSlug || salonSlug.length > 80) throw new Error('Falta el enlace del salón. Pedile el link de reservas a tu peluquera.');
     config();

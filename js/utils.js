@@ -19,9 +19,25 @@ export const datePY = value => {
     year: 'numeric'
   }).format(date);
 };
-export const dateInput = (date = new Date()) => new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'America/Asuncion'
-}).format(date);
+// Build the local calendar date from parts so it stays correct across browser locales/timezones.
+export const dateInput = (date = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Asuncion',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+};
+export const daysUntil = (dateValue, today = dateInput()) => {
+  if (!dateValue) return null;
+  const parse = value => {
+    const [year, month, day] = String(value).slice(0, 10).split('-').map(Number);
+    return Date.UTC(year, month - 1, day);
+  };
+  return Math.floor((parse(dateValue) - parse(today)) / 86400000);
+};
 export const shiftDate = (value, days) => {
   const [year, month, day] = String(value).slice(0, 10).split('-').map(Number);
   return dateInput(new Date(Date.UTC(year, month - 1, day + Number(days), 12)));
@@ -37,18 +53,37 @@ export const timePY = value => String(value ?? '').includes('T') ? new Intl.Date
   hourCycle: 'h23'
 }).format(new Date(value)) : String(value ?? '').slice(0, 5);
 export const uuid = () => crypto.randomUUID();
-export function applyBrandColor(value, root = document.documentElement) {
+export function noStoreFetch(input, init = {}) {
+  return fetch(input, { ...init, cache: 'no-store' });
+}
+export function applyTheme(theme) {
+  const dark = theme === 'dark';
+  document.body.classList.toggle('dark', dark);
+  const brandColor = getComputedStyle(document.body).getPropertyValue('--primary-fill').trim();
+  applyBrandColor(brandColor);
+}
+export function syncThemeFromStorage() {
+  window.addEventListener('storage', event => {
+    if (event.key === 'mis-clientas-theme') applyTheme(event.newValue || 'light');
+  });
+}
+export function applyBrandColor(value, root = document.body) {
   if (!/^#[0-9a-f]{6}$/i.test(String(value || ''))) return;
   const parts = value.slice(1).match(/../g).map(c => parseInt(c, 16));
   const mix = (target, ratio) => '#' + parts.map(n => Math.round(n * (1 - ratio) + target * ratio).toString(16).padStart(2, '0')).join('');
-  const luminance = parts.map(n => {
-    const c = n / 255;
-    return c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4;
-  }).reduce((sum, n, i) => sum + n * [.2126, .7152, .0722][i], 0);
-  root.style.setProperty('--brand', value);
-  root.style.setProperty('--brand-dark', mix(0, .22));
-  root.style.setProperty('--brand-soft', mix(255, .91));
-  root.style.setProperty('--brand-text', luminance > .42 ? '#24191c' : '#ffffff');
+  const luminance = color => color.slice(1).match(/../g).map(c => parseInt(c, 16) / 255).map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4).reduce((sum, n, i) => sum + n * [.2126, .7152, .0722][i], 0);
+  const darkText = getComputedStyle(root).getPropertyValue('--on-primary-dark').trim();
+  const lightText = getComputedStyle(root).getPropertyValue('--on-primary-light').trim();
+  const foreground = color => luminance(color) > .179 ? darkText : lightText;
+  const hover = mix(0, .22);
+  const darkMode = root.classList.contains('dark');
+  root.style.setProperty('--primary-fill', value);
+  root.style.setProperty('--primary-hover', hover);
+  root.style.setProperty('--primary-soft', mix(darkMode ? 0 : 255, darkMode ? .56 : .91));
+  root.style.setProperty('--on-primary', foreground(value));
+  root.style.setProperty('--on-primary-hover', foreground(hover));
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = value;
 }
 export function toast(message, kind = 'success') {
   const region = $('#toast-region');
@@ -135,6 +170,7 @@ export function beginningOfWeek(date = new Date()) {
 export function requestError(error) {
   if (!error) return 'Ocurrió un error inesperado.';
   if (error.code === '23505') return 'Ese dato ya existe. Revisá e intentá nuevamente.';
-  if (error.code === '42501' || error.code === 'PGRST301') return 'Tu cuenta no tiene permiso para esta acción. Revisá tu suscripción.';
+  if (error.code === 'PGRST202' || error.code === 'PGRST203') return 'La base todavía no tiene publicada la función de pagos actualizada. Ejecutá supabase/migracion_01.sql en el SQL Editor de Supabase y volvé a intentar.';
+  if (error.code === '42501' || error.code === 'PGRST301') return 'Tu cuenta está en modo de solo lectura. Renová la suscripción o contactá a soporte para seguir editando.';
   return error.message || 'Ocurrió un error inesperado.';
 }

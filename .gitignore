@@ -2,9 +2,28 @@
 .env
 .env.*
 !.env.example
+*.env
 *.pem
 *.key
+*.p12
+*.pfx
+*.secret
 *.log
+*.tmp
+*.bak
+*.swp
+
+# Exportaciones, respaldos y datos de desarrollo locales
+backups/
+exports/
+*.backup.json
+*.backup.csv
+*.sqlite
+*.db
+*.dump
+secrets/
+supabase/.branches/
+supabase/.temp/
 
 # Herramientas y sistema operativo
 .DS_Store
@@ -15,3 +34,7 @@ Thumbs.db
 node_modules/
 coverage/
 dist/
+__pycache__/
+.pytest_cache/
+playwright-report/
+test-results/
