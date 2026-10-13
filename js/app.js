@@ -1487,25 +1487,34 @@ function paymentForm(item) {
   const c = clientById(item.clienta_id);
   if(item.estado==='hecho'&&state.data.pagos.some(p=>p.turno_id===item.id)) return toast('Este turno ya tiene un pago. Abrí su detalle para ver o anular el cobro.');
   state.quickThanks=false;
-  showModal('Cobro rápido', `<form id="quick-payment-form" class="form-grid"><p class="wide muted">${e(c?.nombre||'Clienta')} · ${e(serviceById(item.servicio_id)?.nombre||'Turno')} · ${datePY(item.fecha)} ${timePY(item.hora)}</p>${formField('Monto recibido / abono (Gs.)','monto_gs',item.precio_gs,'number',{required:true,min:0,max:item.precio_gs})}${formField('Fecha de pago','fecha',dateInput(),'date',{required:true})}<label class="check-field wide"><input name="agradecer" type="checkbox">Enviar agradecimiento por WhatsApp</label><div class="cash-methods wide"><button type="button" class="button primary" data-action="cash-medium" data-cash-medium="Efectivo" data-turn-id="${e(item.id)}">Efectivo</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Transferencia" data-turn-id="${e(item.id)}">Transferencia</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Tigo Money" data-turn-id="${e(item.id)}">Tigo Money</button><button type="button" class="button ghost" data-action="cash-medium" data-cash-medium="Deuda" data-turn-id="${e(item.id)}">Deuda</button></div><p class="wide muted tiny">Si elegís Deuda con un abono parcial, se registra ese monto y el resto queda pendiente. El medio del abono se guarda como “sin especificar”.</p></form>`, '');
+  showModal('Cobro rápido', `<form id="quick-payment-form" class="form-grid"><p class="wide muted">${e(c?.nombre||'Clienta')} · ${e(serviceById(item.servicio_id)?.nombre||'Turno')} · ${datePY(item.fecha)} ${timePY(item.hora)}</p>${formField('Monto recibido (Gs.)','monto_gs',item.precio_cierre_gs??item.precio_gs,'number',{required:true,min:0,max:item.precio_cierre_gs??item.precio_gs})}${formField('Fecha de pago','fecha',dateInput(),'date',{required:true})}<label class="check-field wide"><input name="agradecer" type="checkbox">Enviar agradecimiento por WhatsApp</label><div class="cash-methods wide"><button type="button" class="button primary" data-action="cash-medium" data-cash-medium="Efectivo" data-turn-id="${e(item.id)}">Efectivo</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Transferencia" data-turn-id="${e(item.id)}">Transferencia</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Tigo Money" data-turn-id="${e(item.id)}">Tigo Money</button><button type="button" class="button ghost" data-action="cash-medium" data-cash-medium="Otro" data-turn-id="${e(item.id)}">Otro medio</button></div><div id="other-medium-fields" class="wide" hidden>${formField('Especificá cómo pagó','otro_detalle','','text',{maxlength:60})}<button type="button" class="button primary" data-action="cash-other-confirm" data-cash-medium="Otro" data-turn-id="${e(item.id)}">Registrar pago</button></div><p class="wide muted tiny">Si abonás menos del precio, la diferencia queda como saldo pendiente en la ficha de la clienta.</p></form>`, '');
   $('#quick-payment-form').addEventListener('submit',ev=>ev.preventDefault());
   $('#modal-submit')?.remove(); $('#modal-footer').innerHTML='<button class="button ghost" type="button" data-modal-close>Cancelar</button>';
+}
+
+function selectOtherPayment(button) {
+  const fields=$('#other-medium-fields');
+  if(!fields) return;
+  fields.hidden=false;
+  fields.querySelector('input[name="otro_detalle"]')?.focus();
 }
 
 async function completeQuickPayment(button) {
   if(!requireEditable()) return;
   const form=$('#quick-payment-form'), id=button.dataset.turnId, medio=button.dataset.cashMedium, item=state.data.turnos.find(a=>a.id===id);
   const amount=Number(form.elements.monto_gs.value), price=Number(item?.precio_cierre_gs??item?.precio_gs??0), date=form.elements.fecha.value;
-  if(!Number.isInteger(amount)||amount<0||amount>price||(medio!=='Deuda'&&amount===0&&price>0)) return toast('Ingresá un monto válido entre cero y el precio del servicio. Para un cobro normal, el monto debe ser mayor que cero.','error');
+  if(!Number.isInteger(amount)||amount<0||amount>price||(amount===0&&price>0)) return toast('Ingresá un monto mayor que cero y que no supere el precio del servicio.','error');
+  const otherDetail=medio==='Otro'?form.elements.otro_detalle.value.trim():'';
+  if(medio==='Otro'&&(!otherDetail||otherDetail.length>60)) return toast('Especificá cómo pagó (máximo 60 caracteres).','error');
   const thanks=form.elements.agradecer.checked, client=clientById(item?.clienta_id), thanksPhone=client?.telefono||item?.telefono_publico;
   if(thanks&&!thanksPhone) return toast('Esta clienta no tiene teléfono. Desmarcá el agradecimiento o completá su número.','error');
   setBusy(button,true,'Guardando…');
   const thanksWindow=thanks?window.open('about:blank','_blank'):null;
   try {
-    const {error}=await supabase.rpc('cobrar_turno_rapido',{p_turno_id:id,p_monto_gs:amount,p_fecha:date,p_medio:medio});
+    const {error}=await supabase.rpc('cobrar_turno_rapido',{p_turno_id:id,p_monto_gs:amount,p_fecha:date,p_medio:medio,p_otro_detalle:otherDetail||null});
     if(error) throw error;
     $('#modal').close();
-    toast(medio==='Deuda'?(amount>0?`Abono de ${money(amount)} registrado; queda ${money(Math.max(0,price-amount))} pendiente.`:`Turno realizado; ${money(price)} quedó como deuda.`):'Cobro registrado; la deuda se actualizó.');
+    toast(amount<price?`Pago parcial de ${money(amount)} registrado; queda ${money(price-amount)} pendiente.`:'Cobro registrado; la deuda se actualizó.');
     await refresh(); if(thanks&&thanksWindow) { thanksWindow.location.href=waLink(thanksPhone,thanksMessage(item)); }
   } catch(error) { thanksWindow?.close(); toast(requestError(error),'error'); setBusy(button,false); }
 }
@@ -1594,7 +1603,8 @@ async function handleAction(ev) {
     }) : toast('La cuenta está en modo de solo lectura.', 'error');
     if (action === 'edit-appointment') return editable() ? appointmentForm(state.data.turnos.find(a => a.id === id)) : toast('La cuenta está en modo de solo lectura.', 'error');
     if (action === 'done-appointment') return paymentForm(state.data.turnos.find(a => a.id === id));
-    if (action === 'cash-medium') return completeQuickPayment(b);
+    if (action === 'cash-medium') return b.dataset.cashMedium==='Otro' ? selectOtherPayment(b) : completeQuickPayment(b);
+    if (action === 'cash-other-confirm') return completeQuickPayment(b);
     if (action === 'cancel-appointment') return changeAppointment(id,{estado:'cancelado'}).then(()=>$('#modal').close());
     if (action === 'appointment-details') return appointmentDetails(id);
     if (action === 'quick-search-open') return openGlobalSearch();
