@@ -635,7 +635,13 @@ async function calendarPointerUp(ev) {
   const drag=state.drag; if(!drag) return;
   state.drag=null; drag.block.classList.remove('is-dragging','has-preview'); drag.block.style.transform='';
   if(!drag.active||!drag.preview) return;
+  const positionChanged=drag.preview.fecha!==drag.turn.fecha||minutesOf(drag.preview.hora)!==minutesOf(drag.turn.hora);
+  if(!positionChanged) return;
   suppressCalendarClickUntil=Date.now()+600;
+  if(drag.turn.estado==='hecho') {
+    toast('Este turno ya fue realizado y no se puede mover.','info');
+    return;
+  }
   const overlap=turnOverlap({...drag.turn,...drag.preview},drag.turn.id);
   const force=overlap?confirm(`Este horario se superpone con ${clientById(overlap.clienta_id)?.nombre||'otro turno'}. ¿Guardar igual?`):false;
   if(overlap&&!force) return;
