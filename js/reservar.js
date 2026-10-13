@@ -20,7 +20,9 @@ import {
 } from './utils.js';
 
 let supabase, salonSlug = new URLSearchParams(location.search).get('salon'),
-  salon = null;
+  salon = null,
+  slotsRequest = 0,
+  availableSlots = [];
 
 function config() {
   if (SUPABASE_URL === 'SUPABASE_URL' || SUPABASE_ANON_KEY === 'SUPABASE_ANON_KEY') throw new Error('El salón todavía no publicó su agenda.');
@@ -56,13 +58,18 @@ async function loadSalon() {
   $('#booking-date').value = dateInput();
   $('#booking-form').classList.remove('hidden');
 }
-async function loadSlots() {
+async function loadSlots(silent = false) {
   const date = $('#booking-date').value,
     service = $('#booking-service').value,
-    select = $('#booking-time');
+    select = $('#booking-time'),
+    previousTime = select.value;
+  const requestId = ++slotsRequest;
+  availableSlots = [];
+  select.disabled = true;
   select.innerHTML = '<option value="">Cargando horarios…</option>';
   if (!date || !service) {
     select.innerHTML = '<option value="">Elegí servicio y día</option>';
+    select.disabled = false;
     return;
   }
   try {
@@ -75,12 +82,18 @@ async function loadSlots() {
       p_servicio_id: service
     });
     if (error) throw error;
+    if (requestId !== slotsRequest || date !== $('#booking-date').value || service !== $('#booking-service').value) return;
     const options = (data || []).map(row => row.hora || row).map(value => String(value).slice(0, 5));
-    select.innerHTML = options.length ? `<option value="">Elegí un horario</option>${options.map(time=>`<option value="${e(time)}">${e(time)}</option>`).join('')}` : '<option value="">No hay horarios libres</option>';
-    if (!options.length) toast('No hay horarios para ese día. Elegí otra fecha.', 'info');
+    availableSlots = [...new Set(options)];
+    select.innerHTML = availableSlots.length ? `<option value="">Elegí un horario</option>${availableSlots.map(time=>`<option value="${e(time)}">${e(time)}</option>`).join('')}` : '<option value="">No hay horarios libres</option>';
+    if (availableSlots.includes(previousTime)) select.value = previousTime;
+    select.disabled = false;
+    if (!availableSlots.length && !silent) toast('No hay horarios libres para ese día. Elegí otra fecha.', 'info');
   } catch (error) {
+    if (requestId !== slotsRequest) return;
     select.innerHTML = '<option value="">No se pudieron cargar horarios</option>';
-    toast(requestError(error), 'error');
+    select.disabled = true;
+    if (!silent) toast(requestError(error), 'error');
   }
 }
 async function submit(ev) {
@@ -94,6 +107,12 @@ async function submit(ev) {
     return;
   }
   if ($('#booking-website').value) return;
+  const selectedTime = $('#booking-time').value;
+  if (!selectedTime || !availableSlots.includes(selectedTime)) {
+    $('#booking-error').textContent = 'Ese horario ya no está disponible. Actualizamos la lista; elegí otro horario.';
+    await loadSlots();
+    return;
+  }
   setBusy(b, true, 'Enviando…');
   try {
     const {
@@ -125,10 +144,18 @@ async function init() {
     if (!salonSlug || salonSlug.length > 80) throw new Error('Falta el enlace del salón. Pedile el link de reservas a tu peluquera.');
     config();
     await loadSalon();
-    $('#booking-service').addEventListener('change', loadSlots);
-    $('#booking-date').addEventListener('change', loadSlots);
+    $('#booking-service').addEventListener('change', () => loadSlots());
+    $('#booking-date').addEventListener('change', () => loadSlots());
     $('#booking-form').addEventListener('submit', submit);
     await loadSlots();
+    // Las reservas que otra clienta acaba de enviar deben desaparecer también
+    // de páginas que ya estaban abiertas. El RPC sigue siendo la validación final.
+    window.setInterval(() => {
+      if (document.visibilityState === 'visible') loadSlots(true);
+    }, 30000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') loadSlots(true);
+    });
   } catch (error) {
     $('#booking-intro').textContent = requestError(error);
     $('#booking-form').classList.add('hidden');

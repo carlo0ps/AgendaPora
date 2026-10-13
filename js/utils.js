@@ -172,6 +172,8 @@ export function requestError(error) {
   if (error.code === '23505') return 'Ese dato ya existe. Revisá e intentá nuevamente.';
   if (error.code === 'PGRST202' || error.code === 'PGRST203') {
     const missing = String(error.message || '').toLocaleLowerCase('es');
+    if (/public_slots|public_request_booking|resolver_solicitud_reserva|reserva_slot_disponible/.test(missing))
+      return 'Falta actualizar la disponibilidad de reservas. Ejecutá supabase/migracion_07.sql en Supabase → SQL Editor y volvé a intentar.';
     return /guardar_turno|mover_turno|cobrar_turno_rapido|anular_cobro_turno|marcar_agradecido/.test(missing)
       ? 'Falta publicar las funciones nuevas. Ejecutá supabase/migracion_04.sql en Supabase → SQL Editor y volvé a intentar.'
       : 'La base todavía no tiene publicada la función de pagos actualizada. Ejecutá supabase/migracion_01.sql en el SQL Editor de Supabase y volvé a intentar.';
