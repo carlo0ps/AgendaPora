@@ -1487,7 +1487,7 @@ function paymentForm(item) {
   const c = clientById(item.clienta_id);
   if(item.estado==='hecho'&&state.data.pagos.some(p=>p.turno_id===item.id)) return toast('Este turno ya tiene un pago. Abrí su detalle para ver o anular el cobro.');
   state.quickThanks=false;
-  showModal('Cobro rápido', `<form id="quick-payment-form" class="form-grid"><p class="wide muted">${e(c?.nombre||'Clienta')} · ${e(serviceById(item.servicio_id)?.nombre||'Turno')} · ${datePY(item.fecha)} ${timePY(item.hora)}</p>${formField('Monto recibido (Gs.)','monto_gs',item.precio_gs,'number',{required:true,min:0,max:item.precio_gs})}${formField('Fecha de pago','fecha',dateInput(),'date',{required:true})}<label class="check-field wide"><input name="agradecer" type="checkbox">Enviar agradecimiento por WhatsApp</label><div class="cash-methods wide"><button type="button" class="button primary" data-action="cash-medium" data-cash-medium="Efectivo" data-turn-id="${e(item.id)}">Efectivo</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Transferencia" data-turn-id="${e(item.id)}">Transferencia</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Tigo Money" data-turn-id="${e(item.id)}">Tigo Money</button><button type="button" class="button ghost" data-action="cash-medium" data-cash-medium="Deuda" data-turn-id="${e(item.id)}">Deuda</button></div><p class="wide muted tiny">Si cobrás menos del precio, la diferencia se suma automáticamente a la deuda.</p></form>`, '');
+  showModal('Cobro rápido', `<form id="quick-payment-form" class="form-grid"><p class="wide muted">${e(c?.nombre||'Clienta')} · ${e(serviceById(item.servicio_id)?.nombre||'Turno')} · ${datePY(item.fecha)} ${timePY(item.hora)}</p>${formField('Monto recibido / abono (Gs.)','monto_gs',item.precio_gs,'number',{required:true,min:0,max:item.precio_gs})}${formField('Fecha de pago','fecha',dateInput(),'date',{required:true})}<label class="check-field wide"><input name="agradecer" type="checkbox">Enviar agradecimiento por WhatsApp</label><div class="cash-methods wide"><button type="button" class="button primary" data-action="cash-medium" data-cash-medium="Efectivo" data-turn-id="${e(item.id)}">Efectivo</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Transferencia" data-turn-id="${e(item.id)}">Transferencia</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Tigo Money" data-turn-id="${e(item.id)}">Tigo Money</button><button type="button" class="button ghost" data-action="cash-medium" data-cash-medium="Deuda" data-turn-id="${e(item.id)}">Deuda</button></div><p class="wide muted tiny">Si elegís Deuda con un abono parcial, se registra ese monto y el resto queda pendiente. El medio del abono se guarda como “sin especificar”.</p></form>`, '');
   $('#quick-payment-form').addEventListener('submit',ev=>ev.preventDefault());
   $('#modal-submit')?.remove(); $('#modal-footer').innerHTML='<button class="button ghost" type="button" data-modal-close>Cancelar</button>';
 }
@@ -1495,8 +1495,8 @@ function paymentForm(item) {
 async function completeQuickPayment(button) {
   if(!requireEditable()) return;
   const form=$('#quick-payment-form'), id=button.dataset.turnId, medio=button.dataset.cashMedium, item=state.data.turnos.find(a=>a.id===id);
-  const amount=medio==='Deuda'?0:Number(form.elements.monto_gs.value), date=form.elements.fecha.value;
-  if(medio!=='Deuda'&&(!Number.isInteger(amount)||(amount<=0&&Number(item?.precio_gs)>0)||amount>Number(item?.precio_gs))) return toast('Ingresá un monto entre 1 y el precio del servicio.','error');
+  const amount=Number(form.elements.monto_gs.value), price=Number(item?.precio_cierre_gs??item?.precio_gs??0), date=form.elements.fecha.value;
+  if(!Number.isInteger(amount)||amount<0||amount>price||(medio!=='Deuda'&&amount===0&&price>0)) return toast('Ingresá un monto válido entre cero y el precio del servicio. Para un cobro normal, el monto debe ser mayor que cero.','error');
   const thanks=form.elements.agradecer.checked, client=clientById(item?.clienta_id), thanksPhone=client?.telefono||item?.telefono_publico;
   if(thanks&&!thanksPhone) return toast('Esta clienta no tiene teléfono. Desmarcá el agradecimiento o completá su número.','error');
   setBusy(button,true,'Guardando…');
@@ -1504,7 +1504,8 @@ async function completeQuickPayment(button) {
   try {
     const {error}=await supabase.rpc('cobrar_turno_rapido',{p_turno_id:id,p_monto_gs:amount,p_fecha:date,p_medio:medio});
     if(error) throw error;
-    $('#modal').close(); toast(medio==='Deuda'?'Turno realizado y saldo agregado a la deuda.':'Cobro registrado; la deuda se actualizó.');
+    $('#modal').close();
+    toast(medio==='Deuda'?(amount>0?`Abono de ${money(amount)} registrado; queda ${money(Math.max(0,price-amount))} pendiente.`:`Turno realizado; ${money(price)} quedó como deuda.`):'Cobro registrado; la deuda se actualizó.');
     await refresh(); if(thanks&&thanksWindow) { thanksWindow.location.href=waLink(thanksPhone,thanksMessage(item)); }
   } catch(error) { thanksWindow?.close(); toast(requestError(error),'error'); setBusy(button,false); }
 }
