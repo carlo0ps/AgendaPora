@@ -402,6 +402,15 @@ function serviceById(id) {
   return state.data.servicios.find(s => s.id === id);
 }
 
+function outstandingTurnDebt(turn) {
+  if (turn?.estado !== 'hecho') return 0;
+  const price = Number(turn.precio_cierre_gs ?? turn.precio_gs ?? 0);
+  const paid = state.data.pagos
+    .filter(payment => payment.turno_id === turn.id)
+    .reduce((total, payment) => total + Number(payment.monto_gs || 0), 0);
+  return Math.max(0, price - paid);
+}
+
 function employeeById(id) {
   return state.data.empleadas.find(x => x.id === id);
 }
@@ -571,14 +580,15 @@ function renderAgenda() {
     const blocks = state.data.turnos.filter(a=>a.fecha===day).map(a=>{
       const svc=serviceById(a.servicio_id), c=clientById(a.clienta_id), minute=Number(a.hora.slice(0,2))*60+Number(a.hora.slice(3,5));
       const duration=Number(svc?.duracion_min||60), top=(minute-start)/60*rowHeight, height=Math.max(38,duration/60*rowHeight-3);
-      return `<button type="button" class="cal-event state-${e(a.estado)} ${a.empleada_id?'staff-'+(state.data.empleadas.findIndex(x=>x.id===a.empleada_id)%5):''}" style="top:${top}px;height:${height}px" data-action="appointment-details" data-id="${e(a.id)}" data-drag-id="${e(a.id)}"><strong>${e(timePY(a.hora))} · ${e(c?.nombre||a.nombre_publico||'Clienta')}</strong><span>${e(svc?.nombre||'Servicio')}</span></button>`;
+      const debt=outstandingTurnDebt(a);
+      return `<button type="button" class="cal-event state-${e(a.estado)} ${debt?'has-debt':''} ${a.empleada_id?'staff-'+(state.data.empleadas.findIndex(x=>x.id===a.empleada_id)%5):''}" title="${debt?`Saldo pendiente: ${money(debt)}`:''}" style="top:${top}px;height:${height}px" data-action="appointment-details" data-id="${e(a.id)}" data-drag-id="${e(a.id)}"><strong>${e(timePY(a.hora))} · ${e(c?.nombre||a.nombre_publico||'Clienta')}</strong><span>${e(svc?.nombre||'Servicio')}</span>${debt?`<span class="cal-debt">Debe ${money(debt)}</span>`:''}</button>`;
     }).join('');
     const isToday=day===dateInput(), nowParts=new Intl.DateTimeFormat('en-GB',{timeZone:'America/Asuncion',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()), nowMinute=Number(nowParts.find(p=>p.type==='hour')?.value||0)*60+Number(nowParts.find(p=>p.type==='minute')?.value||0);
     const nowLine=isToday&&nowMinute>=start&&nowMinute<=end?`<i class="cal-now" style="top:${(nowMinute-start)/60*rowHeight}px" aria-label="Hora actual"></i>`:'';
     return `<div class="cal-day-column ${closed?'is-closed':''}" data-calendar-date="${e(day)}"><header>${['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'][weekday]} <strong>${e(day.slice(8,10))}</strong>${closed?'<small>Cerrado</small>':''}</header><div class="cal-day-grid" style="height:${(end-start)/60*rowHeight}px;--calendar-start:${start}px" data-calendar-date="${e(day)}">${nowLine}${blocks}</div></div>`;
   }).join('');
   const title=state.agendaMode==='dia'?datePY(date):`${datePY(actualDates[0])} — ${datePY(actualDates.at(-1))}`;
-  return `${heading('Agenda','Turnos',`<button class="button primary" data-action="new-appointment">＋ Nuevo turno</button>`)}<div class="toolbar agenda-toolbar"><div class="agenda-date-controls"><button class="button ghost" data-action="agenda-prev" aria-label="Período anterior">←</button><label class="field agenda-date-field"><span class="tiny muted">${e(title)}</span><input id="agenda-date" type="date" value="${e(date)}"></label><button class="button ghost" data-action="agenda-next" aria-label="Período siguiente">→</button><button class="button soft" data-action="agenda-today">Hoy</button></div><div class="agenda-view-toggle"><button class="button ${state.agendaMode==='dia'?'soft':'ghost'}" data-action="agenda-day">Día</button><button class="button ${state.agendaMode==='semana'?'soft':'ghost'}" data-action="agenda-week">Semana</button></div></div><p class="muted tiny">Tocá un espacio libre para agendar. Mantené presionado un turno para moverlo.</p><div class="calendar-scroll ${state.agendaMode==='semana'?'week-view':''}"><div class="calendar-grid" style="--cal-hours:${(end-start)/60};--cal-row:${rowHeight}px"><div class="cal-time-axis">${ticks}</div>${columns}</div></div>`;
+  return `${heading('Agenda','Turnos',`<button class="button primary" data-action="new-appointment">＋ Nuevo turno</button>`)}<div class="toolbar agenda-toolbar"><div class="agenda-date-controls"><button class="button ghost" data-action="agenda-prev" aria-label="Período anterior">←</button><label class="field agenda-date-field"><span class="tiny muted">${e(title)}</span><input id="agenda-date" type="date" value="${e(date)}"></label><button class="button ghost" data-action="agenda-next" aria-label="Período siguiente">→</button><button class="button soft" data-action="agenda-today">Hoy</button></div><div class="agenda-view-toggle"><button class="button ${state.agendaMode==='dia'?'soft':'ghost'}" data-action="agenda-day">Día</button><button class="button ${state.agendaMode==='semana'?'soft':'ghost'}" data-action="agenda-week">Semana</button></div></div><p class="muted tiny">Tocá un espacio libre para agendar. Mantené presionado un turno para moverlo. Los turnos amarillos tienen saldo pendiente.</p><div class="calendar-scroll ${state.agendaMode==='semana'?'week-view':''}"><div class="calendar-grid" style="--cal-hours:${(end-start)/60};--cal-row:${rowHeight}px"><div class="cal-time-axis">${ticks}</div>${columns}</div></div>`;
 }
 
 function weekEnd(start) {
@@ -1759,7 +1769,10 @@ async function clientDetails(id) {
     const r = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(p.storage_path, 1800);
     if (!r.error) signed[p.id] = r.data.signedUrl;
   }));
-  const history = visits.map(a => `<div class="list-row"><div class="list-row-main"><button class="text-button" data-action="appointment-details" data-id="${e(a.id)}"><strong>${datePY(a.fecha)} · ${e(timePY(a.hora))} · ${e(serviceById(a.servicio_id)?.nombre||'Servicio')}</strong></button><small>${e(a.estado)} · ${money(a.precio_gs)} · ${e(a.notas||'')}</small></div>${callLink(c.telefono)}<button class="small-button" data-action="appointment-details" data-id="${e(a.id)}">Detalle</button></div>`).join('') || empty('Sin historial', 'Los turnos de esta clienta aparecerán acá.');
+  const history = visits.map(a => {
+    const due=outstandingTurnDebt(a);
+    return `<div class="list-row ${due?'turn-has-debt':''}"><div class="list-row-main"><button class="text-button" data-action="appointment-details" data-id="${e(a.id)}"><strong>${datePY(a.fecha)} · ${e(timePY(a.hora))} · ${e(serviceById(a.servicio_id)?.nombre||'Servicio')}</strong></button><small>${e(a.estado)} · ${money(a.precio_cierre_gs??a.precio_gs)}${due?` · Saldo pendiente: ${money(due)}`:''} · ${e(a.notas||'')}</small></div>${callLink(c.telefono)}<button class="small-button" data-action="appointment-details" data-id="${e(a.id)}">Detalle</button></div>`;
+  }).join('') || empty('Sin historial', 'Los turnos de esta clienta aparecerán acá.');
   const photoHTML = photos.map(p => signed[p.id] ? `<div class="photo-tile"><a href="${e(signed[p.id])}" target="_blank" rel="noopener"><img src="${e(signed[p.id])}" alt="Foto ${e(p.tipo)}"><small>${e(p.tipo)}</small></a><button class="photo-delete" data-action="delete-row" data-table="fotos_clienta" data-id="${e(p.id)}" aria-label="Eliminar foto">×</button></div>` : '').join('');
   const paymentHistory = payments.map(p => `<div class="list-row"><div class="list-row-main"><strong>${datePY(p.fecha)} · ${money(p.monto_gs)}</strong><small>${e(p.medio)} · ${e(p.nota||'Abono')}</small></div></div>`).join('') || '<p class="muted tiny">Todavía no hay pagos registrados.</p>';
   const loyalty = Number(c.visitas || 0),

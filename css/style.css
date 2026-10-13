@@ -415,6 +415,8 @@ font-size:1.3rem}
 .cal-event strong,.cal-event span {font-size:.72rem;line-height:1.2;overflow-wrap:anywhere}
 .cal-event.state-hecho {background:var(--success-surface);border-color:var(--success)}
 .cal-event.state-cancelado {background:var(--danger-surface);border-color:var(--danger)}
+.cal-event.has-debt {background:var(--warning-surface);border-color:var(--warning-border);color:var(--warning)}
+.cal-event .cal-debt {font-weight:750;color:var(--warning)}
 .cal-event {min-height:44px}
 .cal-event.staff-1 {border-left-color:var(--warning)}.cal-event.staff-2 {border-left-color:var(--success)}.cal-event.staff-3 {border-left-color:var(--danger)}.cal-event.staff-4 {border-left-color:var(--text-muted)}
 .cal-event.is-dragging {z-index:5;opacity:.68;cursor:grabbing;box-shadow:var(--shadow-strong)}
@@ -486,6 +488,13 @@ padding:.7rem .2rem;
 border-bottom:1px solid var(--border)}
 .list-row:last-child {
 border:0}
+.list-row.turn-has-debt {
+padding:.65rem;
+border:1px solid var(--warning-border);
+border-radius:12px;
+background:var(--warning-surface);
+color:var(--warning)}
+.list-row.turn-has-debt .list-row-main small {color:var(--warning)}
 .list-row-main {
 min-width:0;
 flex:1}
