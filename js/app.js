@@ -1307,6 +1307,17 @@ function showModal(title, body, submitLabel = 'Guardar') {
   return dialog;
 }
 
+function showAppointmentConfirmation({ nombre, telefono, fecha, hora, servicio }) {
+  const name = nombre || 'Hola';
+  const serviceLine = servicio ? ` El servicio reservado es ${servicio}.` : '';
+  const message = `${nombre ? `Hola ${nombre}` : 'Hola'}, tu turno en ${salonName()} quedó confirmado para el ${datePY(fecha)} a las ${timePY(hora)} hs.${serviceLine} ¡Te esperamos!`;
+  const whatsapp = telefono
+    ? `<a class="button primary" href="${e(waLink(telefono, message))}" target="_blank" rel="noopener">Enviar confirmación por WhatsApp</a>`
+    : '<p class="muted">Esta clienta no tiene teléfono cargado. Agregalo a su ficha para enviarle la confirmación por WhatsApp.</p>';
+  showModal('Turno confirmado', `<div class="success-panel"><div class="success-icon">✓</div><h3>${e(name)}, el turno ya está en tu agenda.</h3><p class="muted">${e(datePY(fecha))} · ${e(timePY(hora))}${servicio ? ` · ${e(servicio)}` : ''}</p>${whatsapp}</div>`, 'Listo');
+  $('#modal-footer').innerHTML = '<button class="button ghost" type="button" data-modal-close>Listo</button>';
+}
+
 function formField(label, name, value = '', type = 'text', opts = {}) {
   const required = opts.required ? 'required' : '',
     min = opts.min !== undefined ? `min="${e(opts.min)}"` : '',
@@ -1354,8 +1365,9 @@ function modalSubmit(fn) {
     }
     setBusy(b, true);
     try {
-      await fn(form, form ? new FormData(form) : new FormData());
+      const afterSubmit = await fn(form, form ? new FormData(form) : new FormData());
       $('#modal').close();
+      if (typeof afterSubmit === 'function') afterSubmit();
     } catch (error) {
       toast(requestError(error), 'error');
     } finally {
@@ -1432,10 +1444,21 @@ function appointmentForm(item = {}) {
       };
     const overlap=turnOverlap(payload,edit?item.id:null), force=overlap?confirm(`Este horario se superpone con ${clientById(overlap.clienta_id)?.nombre||'otro turno'}. ¿Guardar igual?`):false;
     if(overlap&&!force) return;
-    const {error}=await supabase.rpc('guardar_turno',{p_turno_id:edit?item.id:null,p_clienta_id:payload.clienta_id,p_servicio_id:payload.servicio_id,p_fecha:payload.fecha,p_hora:payload.hora,p_precio_gs:payload.precio_gs,p_empleada_id:payload.empleada_id,p_estado:payload.estado,p_notas:payload.notas,p_permitir_solapamiento:force});
+    const {data:turnoId,error}=await supabase.rpc('guardar_turno',{p_turno_id:edit?item.id:null,p_clienta_id:payload.clienta_id,p_servicio_id:payload.servicio_id,p_fecha:payload.fecha,p_hora:payload.hora,p_precio_gs:payload.precio_gs,p_empleada_id:payload.empleada_id,p_estado:payload.estado,p_notas:payload.notas,p_permitir_solapamiento:force});
     if (error) throw error;
     toast(edit ? 'Turno actualizado' : 'Turno agregado');
     await refresh();
+    if (!edit && payload.estado === 'pendiente') {
+      const saved = state.data.turnos.find(turn => turn.id === turnoId);
+      const client = clientById(payload.clienta_id);
+      return () => showAppointmentConfirmation({
+        nombre: client?.nombre || saved?.nombre_publico,
+        telefono: client?.telefono || saved?.telefono_publico,
+        fecha: payload.fecha,
+        hora: payload.hora,
+        servicio: serviceById(payload.servicio_id)?.nombre
+      });
+    }
   });
 }
 
@@ -1673,9 +1696,15 @@ async function resolveRequest(id, accept) {
   if (error) throw error;
   toast(accept ? 'Reserva aceptada y turno creado' : 'Solicitud rechazada');
   await refresh();
-  if (accept && data?.telefono) {
-    showModal('Turno confirmado', `<div class="success-panel"><div class="success-icon">✓</div><h3>${e(data.nombre)}, el turno ya está en tu agenda.</h3><p class="muted">${datePY(data.fecha)} · ${e(timePY(data.hora))}</p><a class="button primary" href="${waLink(data.telefono,`Hola ${data.nombre}, tu turno en ${salonName()} quedó confirmado para ${datePY(data.fecha)} a las ${timePY(data.hora)}. ¡Te esperamos!`)}" target="_blank" rel="noopener">Enviar confirmación por WhatsApp</a></div>`, 'Listo');
-    $('#modal-footer').innerHTML = '<button class="button ghost" type="button" data-modal-close>Listo</button>';
+  if (accept) {
+    const saved = state.data.turnos.find(turn => turn.id === data?.id);
+    showAppointmentConfirmation({
+      nombre: data?.nombre || saved?.nombre_publico,
+      telefono: data?.telefono || saved?.telefono_publico,
+      fecha: data?.fecha || saved?.fecha,
+      hora: data?.hora || saved?.hora,
+      servicio: serviceById(saved?.servicio_id)?.nombre
+    });
   }
 }
 async function deleteRow(table, id) {
