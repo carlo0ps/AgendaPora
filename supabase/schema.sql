@@ -260,7 +260,17 @@ create or replace function public.validar_disponibilidad_turno()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare v_inicio timestamp; v_fin timestamp; v_solapado boolean;
 begin
-  if new.estado='cancelado' then return new; end if;
+  if new.estado='cancelado' or current_setting('agendapora.allow_overlap',true)='on' then return new; end if;
+  -- Cobrar un turno no cambia su horario. No vuelvas a rechazarlo si el
+  -- solapamiento ya fue confirmado al agendarlo.
+  if tg_op='UPDATE' then
+    if old.estado='pendiente' and new.estado='hecho'
+      and new.fecha is not distinct from old.fecha
+      and new.hora is not distinct from old.hora
+      and new.servicio_id is not distinct from old.servicio_id then
+      return new;
+    end if;
+  end if;
   perform pg_advisory_xact_lock(hashtextextended(new.user_id::text || ':' || new.fecha::text, 0));
   v_inicio := new.fecha + new.hora;
   select v_inicio + make_interval(mins => coalesce(s.duracion_min,60)) into v_fin from (select 1) q left join public.servicios s on s.user_id=new.user_id and s.id=new.servicio_id;

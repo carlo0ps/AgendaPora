@@ -1141,7 +1141,8 @@ function templateMessage(key, client, extra = {}) {
 function appointmentDetails(id) {
   const a=state.data.turnos.find(t=>t.id===id); if(!a) return;
   const c=clientById(a.clienta_id),service=serviceById(a.servicio_id),payments=state.data.pagos.filter(p=>p.turno_id===id),phone=c?.telefono||a.telefono_publico;
-  const call=callLink(phone), wa=phone?`<a class="small-button primary" href="${waLink(phone,`Hola ${c?.nombre||a.nombre_publico||''}, sobre tu turno en ${salonName()}.`)}" target="_blank" rel="noopener">WhatsApp</a>`:'';
+  const name=c?.nombre||a.nombre_publico||'Clienta';
+  const call=callLink(phone), wa=phone&&a.estado!=='cancelado'?`<a class="small-button primary" href="${e(waLink(phone,appointmentConfirmationMessage({nombre:name,fecha:a.fecha,hora:a.hora,servicio:service?.nombre})))}" target="_blank" rel="noopener">Confirmar por WhatsApp</a>`:'';
   const paymentActions=payments.length?`<p><strong>Cobrado:</strong> ${money(payments.reduce((n,p)=>n+Number(p.monto_gs),0))}</p>`:'';
   const undoAction=a.estado==='hecho'?`<button class="button danger" data-action="undo-payment" data-id="${e(id)}">Anular cobro / deuda</button>`:'';
   const thanks=a.agradecido_at?'<span class="status hecho">Agradecimiento enviado</span>':a.estado==='hecho'?`<button class="button soft" data-action="send-thanks" data-id="${e(id)}">Enviar agradecimiento</button>`:'';
@@ -1307,10 +1308,13 @@ function showModal(title, body, submitLabel = 'Guardar') {
   return dialog;
 }
 
+function appointmentConfirmationMessage({ nombre, fecha, hora, servicio }) {
+  return `${nombre ? `Hola ${nombre}` : 'Hola'}, tu turno en ${salonName()} quedó confirmado para el ${datePY(fecha)} a las ${timePY(hora)} hs.${servicio ? ` Servicio: ${servicio}.` : ''} ¡Te esperamos!`;
+}
+
 function showAppointmentConfirmation({ nombre, telefono, fecha, hora, servicio }) {
   const name = nombre || 'Hola';
-  const serviceLine = servicio ? ` El servicio reservado es ${servicio}.` : '';
-  const message = `${nombre ? `Hola ${nombre}` : 'Hola'}, tu turno en ${salonName()} quedó confirmado para el ${datePY(fecha)} a las ${timePY(hora)} hs.${serviceLine} ¡Te esperamos!`;
+  const message = appointmentConfirmationMessage({ nombre, fecha, hora, servicio });
   const whatsapp = telefono
     ? `<a class="button primary" href="${e(waLink(telefono, message))}" target="_blank" rel="noopener">Enviar confirmación por WhatsApp</a>`
     : '<p class="muted">Esta clienta no tiene teléfono cargado. Agregalo a su ficha para enviarle la confirmación por WhatsApp.</p>';
