@@ -1,0 +1,8 @@
+#!/bin/sh
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "Gitleaks no está instalado. Instalalo o desactivá este hook con: git config --unset core.hooksPath" >&2
+  exit 1
+fi
+
+exec gitleaks git --pre-commit --redact --staged --verbose

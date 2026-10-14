@@ -1,8 +1,8 @@
-# Credenciales privadas y archivos locales
-.env
-.env.*
-!.env.example
+# Variables locales; no subir archivos .env, ni siquiera ejemplos con valores.
+.env*
 *.env
+
+# Secretos, respaldos, volcados y registros
 *.pem
 *.key
 *.p12
@@ -11,23 +11,31 @@
 *.log
 *.tmp
 *.bak
-*.swp
-
-# Exportaciones, respaldos y datos de desarrollo locales
-backups/
-exports/
-*.backup.json
-*.backup.csv
+*.backup
+*.dump
 *.sqlite
 *.db
-*.dump
-secrets/
-supabase/.branches/
-supabase/.temp/
+respaldo-*.json
+backup-*.json
+*-backup.json
+*.backup.json
+*.backup.csv
 
-# Herramientas y sistema operativo
+# Datos tabulares locales: importaciones y exportaciones de clientas/prospectos
+*.xlsx
+*.xls
+*.csv
+~$*.xlsx
+
+# SQL: solo se permiten los scripts fuente dentro de supabase/.
+*.sql
+!supabase/
+!supabase/*.sql
+
+# Sistema, editores, herramientas y temporales
 .DS_Store
 Thumbs.db
+desktop.ini
 .idea/
 .vscode/
 .history/
@@ -38,3 +46,13 @@ __pycache__/
 .pytest_cache/
 playwright-report/
 test-results/
+backups/
+exports/
+secrets/
+supabase/.branches/
+supabase/.temp/
+
+# Archivos locales de generación de audio ajenos a la aplicación
+agendapora_*.mid
+agendapora_*.wav
+generar_agendapora.py

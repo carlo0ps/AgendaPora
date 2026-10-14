@@ -20,7 +20,7 @@ begin
   delete from public.clientas where user_id=v_user;
 
   update public.perfiles set nombre='Bella Luna Estudio',slug='bella-luna-demo',email_contacto='demo@agendapora.test',
-    telefono='0000000000',direccion='Villa Morra · Asunción',color_principal='#a84462',horario_texto='Lun a sáb · 08:00 a 18:00',
+    telefono='0000000000',direccion='Barrio Demo · Asunción',color_principal='#a84462',horario_texto='Lun a sáb · 08:00 a 18:00',
     horarios='{"1":{"inicio":"08:00","fin":"18:00"},"2":{"inicio":"08:00","fin":"18:00"},"3":{"inicio":"08:00","fin":"18:00"},"4":{"inicio":"08:00","fin":"18:00"},"5":{"inicio":"08:00","fin":"18:00"},"6":{"inicio":"08:00","fin":"16:00"}}'::jsonb,
     vence_el=(now() at time zone 'America/Asuncion')::date+90,activo=true,visitas_premio=8,premio_descripcion='Brushing de regalo',google_review_url='https://g.page/r/demo/review'
     where user_id=v_user;

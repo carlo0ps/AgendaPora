@@ -39,7 +39,7 @@ En **Authentication → Users**, elegí **Add user**, ingresá tu correo y una c
 update public.perfiles
 set es_admin = true
 where user_id = (
-  select id from auth.users where email = 'tu-correo@ejemplo.com'
+  select id from auth.users where email = 'admin@agendapora.test'
 );
 ```
 
@@ -143,6 +143,19 @@ En el plan gratuito, Supabase puede pausar proyectos con poca actividad de base 
 - El service worker solo guarda el shell estático. Supabase Auth, RPC, REST y Storage no se guardan en caché; trabajar con datos privados requiere conexión.
 - Los recordatorios abren WhatsApp sin API. La usuaria marca el envío manualmente porque el navegador no puede confirmar si el mensaje se envió desde WhatsApp.
 - GitHub Pages sirve la aplicación; Supabase sigue siendo el backend. No se guarda una service-role key en el repositorio.
+
+### Protección de secretos del repositorio
+
+El workflow [`.github/workflows/secret-scan.yml`](.github/workflows/secret-scan.yml) ejecuta Gitleaks en cada `push` y `pull_request`, con historial completo, y falla si encuentra un secreto. Revisá el resultado en **GitHub → Actions**. La clave `sb_publishable_…` de `js/config.js` es pública para el cliente; no copies ahí una `sb_secret_…` ni una `service_role`.
+
+Opcionalmente instalá el CLI de Gitleaks y activá el hook local desde la raíz del repo:
+
+```powershell
+git config core.hooksPath .githooks
+gitleaks version
+```
+
+El hook revisa los archivos preparados antes de cada commit. Si querés desactivarlo, ejecutá `git config --unset core.hooksPath`. `.gitignore` excluye archivos `.env*`, CSV/XLSX locales, respaldos, logs y SQL fuera de `supabase/`; no uses `git add -f` para forzar datos privados.
 
 ## Archivos principales
 
