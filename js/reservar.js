@@ -19,7 +19,10 @@ import {
   syncThemeFromStorage
 } from './utils.js';
 
-let supabase, salonSlug = new URLSearchParams(location.search).get('salon'),
+const bookingPathMatch = location.pathname.match(/\/reservar\/([^/]+)\/?$/i);
+let pathSlug = '';
+try { pathSlug = bookingPathMatch ? decodeURIComponent(bookingPathMatch[1]) : ''; } catch { pathSlug = ''; }
+let supabase, salonSlug = pathSlug || new URLSearchParams(location.search).get('salon'),
   salon = null,
   slotsRequest = 0,
   availableSlots = [];

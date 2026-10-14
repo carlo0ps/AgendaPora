@@ -6,8 +6,8 @@ Fecha: 11/10/2026. Revisión del código fuente, pantallas locales, service work
 
 ### Móvil
 
-1. **El botón ☰ no abría un menú.** En [index.html](index.html) y [js/app.js](js/app.js), el botón ahora abre un diálogo accesible con todas las secciones, instalar, reservas, tema y cerrar sesión. Se cierra al tocar afuera, al presionar Escape y al seleccionar una opción; el foco vuelve al botón que lo abrió.
-2. **Había controles con áreas táctiles menores a 44 px y acciones móviles difíciles de encontrar.** En [css/style.css](css/style.css) se ajustaron los botones de tabla, iconos, enlaces accionables, borrado de fotos y paginación. Instalar sigue en la navegación inferior y en el menú; cerrar sesión está en el menú móvil. Los duplicados del encabezado se ocultan en móvil para evitar que se amontonen.
+1. **El botón ☰ no abría un menú.** En [index.html](index.html) y [js/app.js](js/app.js), el botón ahora abre un diálogo accesible con todas las secciones, reservas, tema y cerrar sesión. Se cierra al tocar afuera, al presionar Escape y al seleccionar una opción; el foco vuelve al botón que lo abrió.
+2. **Había controles con áreas táctiles menores a 44 px y acciones móviles difíciles de encontrar.** En [css/style.css](css/style.css) se ajustaron los botones de tabla, iconos, enlaces accionables, borrado de fotos y paginación. Cerrar sesión está en el menú móvil. Los duplicados del encabezado se ocultan en móvil para evitar que se amontonen.
 3. **El encabezado, los diálogos y la pantalla de acceso no contemplaban bien el alto disponible, el teclado ni las zonas seguras.** El encabezado permite que el título largo envuelva; login y bloqueo usan el viewport dinámico y safe-area; el contenido de los diálogos puede desplazarse con el teclado abierto. La navegación inferior reserva espacio para no tapar el contenido.
 4. **El contraste de mensajes y fotos dependía del color de marca aunque el fondo fuera verde, rojo o una imagen oscura.** Se agregaron variables de texto para fondos de estado y superposiciones. Se midieron contrastes de texto comunes: mínimo 5,49:1 en las combinaciones evaluadas, por encima de 4,5:1. Los colores de texto, controles, placeholders, banners, tablas, modales y gráficos usan tokens de tema.
 
@@ -20,7 +20,8 @@ Fecha: 11/10/2026. Revisión del código fuente, pantallas locales, service work
 
 7. **La importación de cumpleaños solo comprobaba el formato con una expresión regular, no que la fecha existiera, y no reconocía `dd/mm/aaaa`.** [js/app.js](js/app.js) ahora acepta `dd/mm/aaaa` y `aaaa-mm-dd`, valida el calendario y rechaza filas con fechas, teléfonos o correos inválidos antes de insertar. También valida nombres obligatorios, teléfonos de clientas/equipo y horarios semanales; limita los mensajes editables a 1500 caracteres.
 8. **El botón de cierre de sesión del admin descartaba la respuesta de Supabase.** [js/admin.js](js/admin.js) ahora maneja y muestra errores, y presenta estado de carga durante el cierre.
-9. **El service worker tenía una versión de caché anterior a esta entrega.** [sw.js](sw.js) ahora usa `agendapora-shell-v13` y elimina solamente versiones anteriores de su propio caché. Conserva network-first, `skipWaiting()`, `clients.claim()` y el bypass de llamadas a Supabase.
+9. **Se retiró la opción de instalar AgendaPorã como app.** Se eliminaron el manifiesto y los íconos exclusivos de instalación; la app conserva el service worker para uso offline.
+10. **El enlace de reservas usaba un parámetro largo.** `js/app.js` ahora genera `/reservar/SLUG`; `404.html` permite resolver esa ruta dinámica en GitHub Pages, y `js/reservar.js` sigue aceptando el formato anterior para enlaces existentes.
 
 La revisión de seguridad no encontró una política RLS que permitiera cruzar salones ni una RPC pública que devolviera datos personales. Se confirmó en [supabase/schema.sql](supabase/schema.sql) que las lecturas propias siguen habilitadas tras el vencimiento, que las escrituras dependen de `cuenta_activa()`, que los campos administrativos del perfil están protegidos y que las RPC privilegiadas fijan `search_path`. Las fotos usan carpetas privadas por UID; los endpoints públicos de reservas exponen servicios y horarios, no los datos de turnos existentes. No se encontró una clave `service_role` en el código.
 
@@ -38,7 +39,7 @@ La revisión de seguridad no encontró una política RLS que permitiera cruzar s
 | Alta | **Recuperación de contraseña** con Supabase Auth, enlace de retorno seguro y mensajes claros. | Evita perder cuentas por contraseñas olvidadas y reduce tickets de soporte. | 1–2 días |
 | Alta | **Asistente de importación Excel/CSV** con vista previa, mapeo de columnas, detección de duplicados y errores por fila. | Reduce la fricción para migrar desde cuadernos u otros sistemas y mejora la conversión de demos. | 3–5 días |
 | Alta | **Estadísticas accionables**: clientas que vuelven, ticket promedio, servicios más rentables, ausencias y saldos antiguos. | Ayuda a demostrar retorno económico y da motivos periódicos para volver a la app. | 4–7 días |
-| Media | **Notificaciones PWA** de agenda del día, nuevas reservas y vencimiento, con preferencias por usuaria. | Reduce ausencias y consultas manuales; puede reforzar el uso recurrente. | 5–8 días |
+| Media | **Notificaciones del navegador** de agenda del día, nuevas reservas y vencimiento, con preferencias por usuaria. | Reduce ausencias y consultas manuales; puede reforzar el uso recurrente. | 5–8 días |
 | Media | **Paquetes de mensajes por rubro** (barbería, manicura, estética, odontología) con variables y textos editables. | Hace el producto más fácil de vender a nuevos segmentos con una demo más pertinente. | 1–2 días |
 | Media | **Interfaz español/guaraní** con selector de idioma y formatos revisados por hablantes locales. | Diferencia el producto en Paraguay y amplía la adopción en salones que prefieren guaraní. | 5–10 días |
 | Media | **Recibos descargables** de pagos a clientas y comprobantes de gastos, con numeración y datos configurables. | Aumenta confianza y utilidad diaria; validar por separado los requisitos de facturación electrónica antes de prometer cumplimiento fiscal. | 4–8 días |
@@ -49,9 +50,8 @@ La revisión de seguridad no encontró una política RLS que permitiera cruzar s
 ### Pantallas y accesibilidad
 
 - [ ] En `index.html`, `admin.html` y `reservar.html`, revisar 360, 390 y 430 px en tema claro y oscuro; confirmar que no se desplaza la página horizontalmente y que los controles se pueden leer y tocar.
-- [ ] En app móvil, abrir ☰, cerrar con toque afuera y Escape, elegir una sección y confirmar que el foco vuelve al botón. Verificar Instalar y Cerrar sesión dentro del menú, y que la barra inferior no cubra el último contenido al abrir el teclado.
+- [ ] En app móvil, abrir ☰, cerrar con toque afuera y Escape, elegir una sección y confirmar que el foco vuelve al botón. Verificar Cerrar sesión dentro del menú y que la barra inferior no cubra el último contenido al abrir el teclado.
 - [ ] En PC a 1280 y 1920 px, recorrer con Tab y Shift+Tab, probar foco visible, hover, sidebar y tablas largas; confirmar el ancho máximo y el desplazamiento interno de las tablas.
-- [ ] Instalar desde Android/Chrome y escritorio; comprobar la guía de iPhone/Safari y la explicación HTTPS en local. Una app instalada no debe seguir ofreciendo instalar.
 
 ### Flujos del salón
 

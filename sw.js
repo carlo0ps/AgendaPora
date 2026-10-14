@@ -1,9 +1,8 @@
-const CACHE_VERSION = 'agendapora-shell-v26';
+const CACHE_VERSION = 'agendapora-shell-v29';
 const SHELL = [
-  './', './index.html', './admin.html', './reservar.html', './offline.html',
-  './manifest.json', './css/style.css', './js/config.js', './js/utils.js',
-  './js/app.js', './js/admin.js', './js/reservar.js', './icons/icon.svg',
-  './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png'
+  './', './index.html', './admin.html', './reservar.html', './404.html', './offline.html',
+  './css/style.css', './js/config.js', './js/utils.js',
+  './js/app.js', './js/admin.js', './js/reservar.js', './icons/icon.svg'
 ];
 
 self.addEventListener('install', event => {
@@ -25,7 +24,7 @@ self.addEventListener('activate', event => {
 function isAppShellRequest(request, url) {
   if (request.mode === 'navigate') return true;
   const path = url.pathname;
-  return /\/(index\.html|admin\.html|reservar\.html|manifest\.json)$/.test(path)
+  return /\/(index\.html|admin\.html|reservar\.html)$/.test(path)
     || /\/(js|css)\/[^/]+\.(js|css)$/.test(path);
 }
 

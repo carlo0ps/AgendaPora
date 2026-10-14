@@ -1,8 +1,8 @@
 # AgendaPorã
 
-CRM, agenda y reservas para peluquerías y salones de belleza. Interfaz en español de Paraguay, moneda en guaraníes, instalada como PWA y alojada como archivos estáticos. Cada salón es una cuenta Supabase Auth y el aislamiento se aplica en PostgreSQL con RLS.
+CRM, agenda y reservas para peluquerías y salones de belleza. Interfaz en español de Paraguay, moneda en guaraníes y alojada como archivos estáticos. Cada salón es una cuenta Supabase Auth y el aislamiento se aplica en PostgreSQL con RLS.
 
-## Instalación paso a paso
+## Configuración y publicación paso a paso
 
 ### 1. Crear el proyecto Supabase
 
@@ -87,9 +87,6 @@ gh api --method POST repos/USUARIO/REPOSITORIO/pages -f build_type=workflow
 La URL aparece en **Settings → Pages** y en la ejecución exitosa de Actions. No se requieren secretos de deploy.
 
 
-### Instalar AgendaPorã en el dispositivo
-
-La app se publica con manifiesto y service worker. Abrí `index.html` desde la URL HTTPS de GitHub Pages e iniciá sesión; el botón **Instalar app** aparece en la barra lateral en PC, en el menú y la navegación móvil, y en **Mi salón**. En Chrome o Edge, tocá el botón para abrir el aviso nativo o usá el ícono de instalar en la barra de direcciones. En Android/Chrome, si el aviso todavía no aparece, abrí **Menú ⋮ → Instalar app / Agregar a pantalla de inicio**. En iPhone o iPad, abrí el sitio en Safari y seguí **Compartir → Agregar a inicio**. La instalación necesita HTTPS; `localhost` también es un contexto seguro para desarrollo.
 ### 9. Dar de alta un salón y cobrar la suscripción
 
 1. En **Supabase → Authentication → Users → Add user**, creá el acceso de la peluquera y confirmá su correo. El trigger crea su perfil y vencimiento de prueba a siete días.
@@ -97,10 +94,12 @@ La app se publica con manifiesto y service worker. Abrí `index.html` desde la U
 3. En **Gestionar**, verificá precio, fecha de vencimiento, estado y notas internas. En **Registrar pago**, anotá monto, fecha y meses de acceso. La RPC calcula el próximo vencimiento en `America/Asuncion`, desde la fecha más lejana entre el vencimiento actual y hoy, y actualiza el estado de la fila al terminar.
 4. Compartí el enlace de acceso de `index.html`. La primera vez, la peluquera puede completar el asistente de cuatro pasos para configurar salón, servicios, horario y primera clienta. Puede omitirlo y retomarlo desde el checklist “Primeros pasos” del inicio. El slug de reservas se crea una sola vez y no se edita desde el perfil.
 
+Los enlaces nuevos de reservas usan `/reservar/SLUG` (por ejemplo, `https://carlo0ps.github.io/AgendaPora/reservar/nombre-del-salon`). En GitHub Pages, `404.html` resuelve la ruta dinámica manteniendo el enlace corto; si más adelante configurás un dominio propio en **Settings → Pages**, el mismo camino seguirá funcionando. Los enlaces antiguos `reservar.html?salon=SLUG` también se aceptan.
+
 ### 10. Checklist de verificación
 
 - [ ] Creá dos cuentas de salón. Cargá una clienta en cada una; confirmá que no se cruzan clientas, agenda, pagos, servicios, fotos ni reportes.
-- [ ] Publicá un servicio y un horario, copiá el link desde la app y hacé una solicitud en `reservar.html?salon=SLUG`. Revisá que muestre solo servicios/horarios y que aparezca como pendiente dentro de `index.html`.
+- [ ] Publicá un servicio y un horario, copiá el link desde la app (formato `/reservar/SLUG`) y hacé una solicitud. Revisá que muestre solo servicios/horarios y que aparezca como pendiente dentro de `index.html`.
 - [ ] Aceptá la solicitud. Debe crear una clienta y un turno una sola vez; enviá la confirmación por WhatsApp desde el enlace.
 - [ ] Marcá un turno como hecho y registrá un abono. Verificá que el pago se registre y que la deuda se recalcule desde turnos hechos menos pagos.
 - [ ] Desde `admin.html`, fijá una fecha de vencimiento pasada o desactivá temporalmente la peluquera. Su sesión debe mostrar la pantalla de bloqueo completa, sin datos ni navegación; exportá CSV/JSON y confirmá que PostgreSQL rechace insert/update/delete aun si se llama la API directamente.

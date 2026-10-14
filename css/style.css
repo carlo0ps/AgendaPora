@@ -305,14 +305,6 @@ font-weight:650}
 background:var(--primary-soft);
 color:var(--text);
 text-decoration:none}
-.install-nav-button {
-border:0;
-background:var(--transparent);
-font:inherit;
-color:var(--text-muted)}
-.install-nav-button:hover {
-background:var(--primary-soft);
-color:var(--text)}
 .nav-icon {
 width:1.3rem;
 text-align:center;
