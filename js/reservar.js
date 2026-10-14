@@ -38,7 +38,38 @@ function config() {
 function selectedServiceIds() {
   return [...document.querySelectorAll('#booking-services input[type="checkbox"]:checked')].map(input => input.value);
 }
+function ensureBookingServicePicker() {
+  let picker = $('#booking-services');
+  if (picker) return picker;
+
+  // Durante un deploy estático, HTML y JS pueden actualizarse en momentos distintos.
+  // Convierte el selector antiguo para que el JS nuevo también funcione con ese HTML.
+  const oldSelect = $('#booking-service');
+  const host = document.createElement('fieldset');
+  host.className = 'field wide booking-service-field';
+  const legend = document.createElement('legend');
+  legend.append('Servicios ');
+  const hint = document.createElement('span');
+  hint.className = 'muted';
+  hint.textContent = '(podés elegir varios)';
+  legend.append(hint);
+  picker = document.createElement('div');
+  picker.id = 'booking-services';
+  picker.className = 'booking-services';
+  picker.setAttribute('role', 'group');
+  picker.setAttribute('aria-label', 'Elegí uno o varios servicios');
+  const summary = document.createElement('p');
+  summary.id = 'booking-services-summary';
+  summary.className = 'booking-services-summary';
+  summary.setAttribute('aria-live', 'polite');
+  host.append(legend, picker, summary);
+  if (oldSelect) oldSelect.closest('.field')?.replaceWith(host);
+  else $('#booking-form')?.prepend(host);
+  if (!$('#booking-services')) throw new Error('No se encontró el formulario público de reservas. Actualizá la página e intentá de nuevo.');
+  return $('#booking-services');
+}
 function renderServiceSummary() {
+  if (!$('#booking-services-summary')) return;
   const selected = selectedServiceIds().map(id => salon.servicios.find(service => service.id === id)).filter(Boolean);
   const price = selected.reduce((sum, service) => sum + Number(service.precio_gs || 0), 0);
   const duration = selected.reduce((sum, service) => sum + Number(service.duracion_min || 0), 0);
@@ -62,7 +93,7 @@ async function loadSalon() {
   $('#salon-logo').onerror = () => $('#salon-logo').src = 'icons/icon.svg';
   applyBrandColor(salon.color_principal);
   $('#booking-intro').textContent = [salon.direccion, salon.horario_texto].filter(Boolean).join(' · ') || 'Elegí un servicio y un horario que te quede cómodo.';
-  const services = $('#booking-services');
+  const services = ensureBookingServicePicker();
   services.innerHTML = salon.servicios.map(s=>`<label class="booking-service-option"><input type="checkbox" value="${e(s.id)}"><span><strong>${e(s.nombre)}</strong><small>${money(s.precio_gs)} · ${Number(s.duracion_min)} min</small></span></label>`).join('');
   if (!salon.servicios.length) throw new Error('El salón todavía no publicó servicios disponibles.');
   renderServiceSummary();
@@ -71,11 +102,15 @@ async function loadSalon() {
   $('#booking-form').classList.remove('hidden');
 }
 async function loadSlots(silent = false) {
-  const date = $('#booking-date').value,
+  const date = $('#booking-date')?.value || '',
     services = selectedServiceIds(),
     servicesKey = services.join(','),
     select = $('#booking-time'),
-    previousTime = select.value;
+    previousTime = select?.value || '';
+  if (!select || !$('#booking-date')) {
+    toast('No se encontró el formulario de horarios. Actualizá la página e intentá de nuevo.', 'error');
+    return;
+  }
   const requestId = ++slotsRequest;
   availableSlots = [];
   select.disabled = true;
@@ -162,7 +197,7 @@ async function init() {
     if (!salonSlug || salonSlug.length > 80) throw new Error('Falta el enlace del salón. Pedile el link de reservas a tu peluquera.');
     config();
     await loadSalon();
-    $('#booking-services').addEventListener('change', () => {
+    ensureBookingServicePicker().addEventListener('change', () => {
       renderServiceSummary();
       loadSlots();
     });

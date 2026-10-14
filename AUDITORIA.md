@@ -83,7 +83,7 @@ Antes de comenzar, aplicá las migraciones pendientes en el orden documentado en
 - [ ] **Búsqueda global:** buscar nombre y teléfono de clientas, nombre de servicio y fecha/servicio/clienta de turnos con y sin tildes. Probar debounce, máximo ocho resultados por grupo, navegación con flechas/Enter/Escape, `/`, `Ctrl+K` y apertura de ficha/detalle/edición.
 - [ ] **Atajos y llamadas:** abrir/cerrar el FAB, probar sus tres accesos y verificar que desaparece con cualquier modal y en pantalla de bloqueo. Probar `n`, `/`, `Ctrl+K`, `?`; desde ficha/lista/detalle llamar a teléfonos con `098…`, `59598…` y `+595 98…` y confirmar que todos generan un solo prefijo `+595`.
 - [ ] **Agradecimiento y reseña:** guardar una URL HTTPS desde Mi salón; probar rechazo de HTTP e URL inválida. Cobrar con el checkbox, enviar desde el detalle y marcar como enviado. Revisar que el mensaje use el servicio/link, que sin link no incluya la petición de reseña y que el inicio deje de mostrar la fila tras marcarla. Confirmar que no vuelva a aparecer para un turno con `agradecido_at`.
-- [ ] Repetir todo en tema claro/oscuro y PC a 1280/1920 px; confirmar foco visible, botones táctiles de al menos 44 px, sin scroll horizontal de página, sin errores de consola y que `sw.js` usa `agendapora-shell-v22`.
+- [ ] Repetir todo en tema claro/oscuro y PC a 1280/1920 px; confirmar foco visible, botones táctiles de al menos 44 px, sin scroll horizontal de página, sin errores de consola y que `sw.js` usa `agendapora-shell-v23`.
 
 ## 6. Pruebas manuales para servicios múltiples en reservas públicas
 
