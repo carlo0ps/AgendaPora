@@ -848,7 +848,7 @@ box-shadow:var(--shadow)}
 .booking-card .form-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
 .booking-card form {display:grid;width:100%;min-width:0;max-width:100%}
 .booking-card .field {min-width:0}
-.booking-card .booking-date-field {grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr);min-width:0;width:100%;max-width:100%}
+.booking-card .booking-date-field {grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr);box-sizing:border-box;min-width:0;width:100%;max-width:100%;padding-inline-end:1rem}
 .booking-card input[type="date"] {display:block;box-sizing:border-box;inline-size:100%;min-inline-size:0;max-inline-size:100%;padding-inline:.65rem;font-size:1rem;text-align:start}
 .booking-card input[type="date"]::-webkit-date-and-time-value {width:100%;min-width:0;text-align:start}
 .booking-card input[type="date"]::-webkit-calendar-picker-indicator {flex:none;margin-inline-start:.25rem}
@@ -1254,7 +1254,7 @@ font-size:1.45rem}
   gap: .5rem;
   min-width: 0;
 }
-.agenda-date-field { grid-column:1/-1;grid-row:2;min-width:0;width:min(100%,22rem); }
+.agenda-date-field { grid-column:1/-1;grid-row:2;box-sizing:border-box;min-width:0;width:min(100%,22rem);padding-inline-end:1rem; }
 .agenda-date-controls > [data-action="agenda-prev"] {grid-column:1;grid-row:1}
 .agenda-date-controls > [data-action="agenda-next"] {grid-column:2;grid-row:1}
 .agenda-date-controls > [data-action="agenda-today"] {grid-column:4;grid-row:1}
