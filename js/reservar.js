@@ -35,6 +35,17 @@ function config() {
     global: { fetch: noStoreFetch }
   });
 }
+function selectedServiceIds() {
+  return [...document.querySelectorAll('#booking-services input[type="checkbox"]:checked')].map(input => input.value);
+}
+function renderServiceSummary() {
+  const selected = selectedServiceIds().map(id => salon.servicios.find(service => service.id === id)).filter(Boolean);
+  const price = selected.reduce((sum, service) => sum + Number(service.precio_gs || 0), 0);
+  const duration = selected.reduce((sum, service) => sum + Number(service.duracion_min || 0), 0);
+  $('#booking-services-summary').textContent = selected.length
+    ? `${selected.length} ${selected.length === 1 ? 'servicio' : 'servicios'} · ${money(price)} · ${duration} min en total`
+    : 'Elegí al menos un servicio para ver los horarios disponibles.';
+}
 async function loadSalon() {
   const {
     data,
@@ -51,23 +62,25 @@ async function loadSalon() {
   $('#salon-logo').onerror = () => $('#salon-logo').src = 'icons/icon.svg';
   applyBrandColor(salon.color_principal);
   $('#booking-intro').textContent = [salon.direccion, salon.horario_texto].filter(Boolean).join(' · ') || 'Elegí un servicio y un horario que te quede cómodo.';
-  const select = $('#booking-service');
-  select.innerHTML = `<option value="">Elegí un servicio</option>${salon.servicios.map(s=>`<option value="${e(s.id)}">${e(s.nombre)} · ${money(s.precio_gs)} · ${Number(s.duracion_min)} min</option>`).join('')}`;
+  const services = $('#booking-services');
+  services.innerHTML = salon.servicios.map(s=>`<label class="booking-service-option"><input type="checkbox" value="${e(s.id)}"><span><strong>${e(s.nombre)}</strong><small>${money(s.precio_gs)} · ${Number(s.duracion_min)} min</small></span></label>`).join('');
   if (!salon.servicios.length) throw new Error('El salón todavía no publicó servicios disponibles.');
+  renderServiceSummary();
   $('#booking-date').min = dateInput();
   $('#booking-date').value = dateInput();
   $('#booking-form').classList.remove('hidden');
 }
 async function loadSlots(silent = false) {
   const date = $('#booking-date').value,
-    service = $('#booking-service').value,
+    services = selectedServiceIds(),
+    servicesKey = services.join(','),
     select = $('#booking-time'),
     previousTime = select.value;
   const requestId = ++slotsRequest;
   availableSlots = [];
   select.disabled = true;
   select.innerHTML = '<option value="">Cargando horarios…</option>';
-  if (!date || !service) {
+  if (!date || !services.length) {
     select.innerHTML = '<option value="">Elegí servicio y día</option>';
     select.disabled = false;
     return;
@@ -76,13 +89,13 @@ async function loadSlots(silent = false) {
     const {
       data,
       error
-    } = await supabase.rpc('public_slots', {
+    } = await supabase.rpc('public_slots_multiple', {
       p_slug: salonSlug,
       p_fecha: date,
-      p_servicio_id: service
+      p_servicio_ids: services
     });
     if (error) throw error;
-    if (requestId !== slotsRequest || date !== $('#booking-date').value || service !== $('#booking-service').value) return;
+    if (requestId !== slotsRequest || date !== $('#booking-date').value || servicesKey !== selectedServiceIds().join(',')) return;
     const options = (data || []).map(row => row.hora || row).map(value => String(value).slice(0, 5));
     availableSlots = [...new Set(options)];
     select.innerHTML = availableSlots.length ? `<option value="">Elegí un horario</option>${availableSlots.map(time=>`<option value="${e(time)}">${e(time)}</option>`).join('')}` : '<option value="">No hay horarios libres</option>';
@@ -108,6 +121,11 @@ async function submit(ev) {
   }
   if ($('#booking-website').value) return;
   const selectedTime = $('#booking-time').value;
+  const services = selectedServiceIds();
+  if (!services.length) {
+    $('#booking-error').textContent = 'Elegí al menos un servicio.';
+    return;
+  }
   if (!selectedTime || !availableSlots.includes(selectedTime)) {
     $('#booking-error').textContent = 'Ese horario ya no está disponible. Actualizamos la lista; elegí otro horario.';
     await loadSlots();
@@ -117,9 +135,9 @@ async function submit(ev) {
   try {
     const {
       error
-    } = await supabase.rpc('public_request_booking', {
+    } = await supabase.rpc('public_request_booking_multiple', {
       p_slug: salonSlug,
-      p_servicio_id: $('#booking-service').value,
+      p_servicio_ids: services,
       p_fecha: $('#booking-date').value,
       p_hora: $('#booking-time').value,
       p_nombre: $('#booking-client-name').value.trim(),
@@ -144,7 +162,10 @@ async function init() {
     if (!salonSlug || salonSlug.length > 80) throw new Error('Falta el enlace del salón. Pedile el link de reservas a tu peluquera.');
     config();
     await loadSalon();
-    $('#booking-service').addEventListener('change', () => loadSlots());
+    $('#booking-services').addEventListener('change', () => {
+      renderServiceSummary();
+      loadSlots();
+    });
     $('#booking-date').addEventListener('change', () => loadSlots());
     $('#booking-form').addEventListener('submit', submit);
     await loadSlots();

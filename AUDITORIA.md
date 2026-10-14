@@ -74,7 +74,7 @@ La revisión de seguridad no encontró una política RLS que permitiera cruzar s
 
 ## 5. Pruebas manuales para calendario, caja, búsqueda y accesos rápidos
 
-Antes de comenzar, aplicá las migraciones pendientes en el orden documentado en el README. Para este flujo, confirmá que `migracion_12.sql` terminó con `Success` en **Supabase → SQL Editor → New query**. Probá con una cuenta activa y datos de prueba; para las verificaciones de rechazo, repetí los intentos con una cuenta vencida.
+Antes de comenzar, aplicá las migraciones pendientes en el orden documentado en el README. Para este flujo, confirmá que `migracion_12.sql` y `migracion_13.sql` terminaron con `Success` en **Supabase → SQL Editor → New query**. Probá con una cuenta activa y datos de prueba; para las verificaciones de rechazo, repetí los intentos con una cuenta vencida.
 
 - [ ] **Calendario visual:** comparar Día/Semana con `perfiles.horarios`, anterior/siguiente/hoy y fecha seleccionada. Confirmar bloque proporcional, estado, empleada y línea de hora actual. Tocar un hueco, crear turno, mantener 300 ms y mover con dedo; repetir con mouse. Probar un choque, cancelar y guardar igualmente. Revisar que Semana se desplaza dentro de su propio contenedor a 360/390/430 px.
 - [ ] **Cobro rápido:** desde un turno pendiente, marcar hecho y elegir Efectivo, Transferencia, Tigo Money y Otro; Otro debe exigir la especificación del medio. Probar pago parcial con cada opción y verificar el saldo/visitas de la clienta, recargar y confirmar que no duplica el cobro. Abrir un turno cobrado y anular; el estado debe volver a pendiente y el saldo recalcularse. Repetir una escritura con cuenta vencida y confirmar el rechazo del servidor.
@@ -83,4 +83,11 @@ Antes de comenzar, aplicá las migraciones pendientes en el orden documentado en
 - [ ] **Búsqueda global:** buscar nombre y teléfono de clientas, nombre de servicio y fecha/servicio/clienta de turnos con y sin tildes. Probar debounce, máximo ocho resultados por grupo, navegación con flechas/Enter/Escape, `/`, `Ctrl+K` y apertura de ficha/detalle/edición.
 - [ ] **Atajos y llamadas:** abrir/cerrar el FAB, probar sus tres accesos y verificar que desaparece con cualquier modal y en pantalla de bloqueo. Probar `n`, `/`, `Ctrl+K`, `?`; desde ficha/lista/detalle llamar a teléfonos con `098…`, `59598…` y `+595 98…` y confirmar que todos generan un solo prefijo `+595`.
 - [ ] **Agradecimiento y reseña:** guardar una URL HTTPS desde Mi salón; probar rechazo de HTTP e URL inválida. Cobrar con el checkbox, enviar desde el detalle y marcar como enviado. Revisar que el mensaje use el servicio/link, que sin link no incluya la petición de reseña y que el inicio deje de mostrar la fila tras marcarla. Confirmar que no vuelva a aparecer para un turno con `agradecido_at`.
-- [ ] Repetir todo en tema claro/oscuro y PC a 1280/1920 px; confirmar foco visible, botones táctiles de al menos 44 px, sin scroll horizontal de página, sin errores de consola y que `sw.js` usa `agendapora-shell-v21`.
+- [ ] Repetir todo en tema claro/oscuro y PC a 1280/1920 px; confirmar foco visible, botones táctiles de al menos 44 px, sin scroll horizontal de página, sin errores de consola y que `sw.js` usa `agendapora-shell-v22`.
+
+## 6. Pruebas manuales para servicios múltiples en reservas públicas
+
+- [ ] En un enlace público, elegir dos o más servicios y comprobar que el resumen muestra precio y duración total combinados; cambiar selección y verificar que la lista de horarios se actualiza.
+- [ ] Solicitar el turno, confirmar que el horario deja de ofrecerse a otras clientas, y aceptar la solicitud desde la app. Verificar que se crea un solo turno con el conjunto completo de servicios, precio y duración correctos.
+- [ ] Probar que no se pueda reservar un hueco menor que la duración combinada, ni repetir un servicio, superar ocho selecciones, omitir todos los servicios, usar un horario ocupado o enviar una solicitud con el honeypot lleno.
+- [ ] Confirmar que el flujo anterior de una reserva de un solo servicio sigue funcionando y que solicitudes antiguas se aceptan con su servicio original.

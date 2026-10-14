@@ -16,6 +16,8 @@ Si ya tenías una instalación anterior, ejecutá en **SQL Editor → New query*
 
 Para llenar una cuenta de demostración, primero creá en Authentication un usuario dedicado con el correo reservado `demo@agendapora.test`. Después ejecutá [`supabase/seed_demo.sql`](supabase/seed_demo.sql). El seed reemplaza únicamente los datos de ese usuario demo y agrega veinte clientas ficticias, servicios, turnos, pagos, gastos, stock y una solicitud pendiente. Los teléfonos son números ficticios no operativos y los correos usan dominios reservados de prueba.
 
+Para que las clientas puedan elegir varios servicios en una reserva pública, ejecutá también [`supabase/migracion_13.sql`](supabase/migracion_13.sql) después de `migracion_12.sql` (tanto en instalaciones existentes como nuevas). La migración guarda el desglose y los precios/duraciones acordados con la solicitud, calcula disponibilidad con la duración combinada y conserva la conversión de solicitudes existentes al aceptarlas.
+
 ### 3. Verificar Storage
 
 En **Storage**, confirmá que existan:
