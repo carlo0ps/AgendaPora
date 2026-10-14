@@ -49,7 +49,7 @@ const NAV = [
   ['empleadas', '♙', 'Equipo'],
   ['configuracion', '⚙', 'Mi salón']
 ];
-const TABLES = ['clientas', 'servicios', 'turnos', 'pagos', 'plantillas', 'gastos', 'productos', 'empleadas', 'solicitudes_reserva', 'fotos_clienta'];
+const TABLES = ['clientas', 'servicios', 'turnos', 'turno_servicios', 'pagos', 'plantillas', 'gastos', 'productos', 'empleadas', 'solicitudes_reserva', 'fotos_clienta'];
 const MUTATING_ACTIONS = new Set(['new-client','edit-client','new-service','edit-service','new-appointment','new-client-appointment','edit-appointment','done-appointment','pay-appointment','new-expense','new-product','edit-product','new-employee','edit-employee','delete-row','accept-request','reject-request','import-clients','save-templates','cancel-appointment','undo-payment','mark-thanks']);
 const TEMPLATES = [
   ['recordatorio', 'Recordatorio de turno', 'Hola {nombre} 😊 Te recuerdo tu turno en {salon} el {fecha} a las {hora}. ¡Te esperamos!'],
@@ -378,7 +378,7 @@ async function loadLockedExportData() {
   if (state.exportLoaded) return;
   if (!state.exportLoading) {
     const ownerId = state.client?.id;
-    state.exportLoading = loadTables(['clientas','turnos','pagos','gastos']).then(data => {
+    state.exportLoading = loadTables(['clientas','turnos','turno_servicios','pagos','gastos']).then(data => {
       if (state.client?.id === ownerId && state.locked) {
         state.data = { ...state.data, ...data };
         state.exportLoaded = true;
@@ -400,6 +400,39 @@ function clientById(id) {
 
 function serviceById(id) {
   return state.data.servicios.find(s => s.id === id);
+}
+
+function appointmentServices(turn) {
+  const saved = (state.data.turno_servicios || []).filter(row => row.turno_id === turn?.id).sort((a,b)=>Number(a.orden||0)-Number(b.orden||0));
+  if (saved.length) return saved.map(row => ({
+    id: row.servicio_id,
+    nombre: row.servicio_nombre || serviceById(row.servicio_id)?.nombre || 'Servicio eliminado',
+    precio_gs: Number(row.precio_gs || 0),
+    duracion_min: Number(row.duracion_min || 0)
+  }));
+  const service=serviceById(turn?.servicio_id);
+  return turn ? [{id:service?.id||turn.servicio_id||'sin-servicio',nombre:service?.nombre||turn.servicio_nombre||'Servicio',precio_gs:Number(turn.precio_gs??service?.precio_gs??0),duracion_min:Number(turn.duracion_min??service?.duracion_min??60)}] : [];
+}
+
+function appointmentServiceLabel(turn) {
+  return appointmentServices(turn).map(service=>service.nombre).join(' + ') || 'Servicio';
+}
+
+function appointmentDuration(turn) {
+  const total=appointmentServices(turn).reduce((sum,service)=>sum+Number(service.duracion_min||0),0);
+  return Number(turn?.duracion_min||total||60);
+}
+
+function allocateServiceAmount(amount, services) {
+  if (!services.length) return [];
+  const weights=services.map(service=>Math.max(0,Number(service.precio_gs||0))), weightTotal=weights.reduce((sum,value)=>sum+value,0);
+  if (!weightTotal) return services.map((service,index)=>({service,amount:index===0?amount:0}));
+  let remaining=amount;
+  return services.map((service,index)=>{
+    const share=index===services.length-1?remaining:Math.floor(amount*weights[index]/weightTotal);
+    remaining-=share;
+    return {service,amount:share};
+  });
 }
 
 function outstandingTurnDebt(turn) {
@@ -531,14 +564,13 @@ function renderHome() {
     pending = state.data.solicitudes_reserva.filter(r => r.estado === 'pendiente');
   const thanksPending=state.data.turnos.filter(a=>a.estado==='hecho'&&!a.agradecido_at&&a.fecha>=shiftDate(today,-3)&&a.fecha<=today).sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.hora.localeCompare(a.hora));
   const scheduleRows = dayAppointments.slice(0, 7).map(a => {
-    const c = clientById(a.clienta_id),
-      s = serviceById(a.servicio_id);
-    return `<div class="list-row"><div class="avatar">${e((c?.nombre||a.nombre_publico||'?').slice(0,1).toUpperCase())}</div><div class="list-row-main"><strong>${e(timePY(a.hora))} · ${e(c?.nombre||a.nombre_publico||'Clienta')}</strong><small>${e(s?.nombre||a.servicio_nombre||'Servicio')} · ${money(a.precio_gs)}</small></div>${callLink(c?.telefono||a.telefono_publico)}<span class="status ${e(a.estado)}">${e(a.estado)}</span>${a.estado==='pendiente'?`<button class="small-button primary" data-action="done-appointment" data-id="${e(a.id)}">Hecho / cobrar</button>`:''}</div>`
+    const c = clientById(a.clienta_id);
+    return `<div class="list-row"><div class="avatar">${e((c?.nombre||a.nombre_publico||'?').slice(0,1).toUpperCase())}</div><div class="list-row-main"><strong>${e(timePY(a.hora))} · ${e(c?.nombre||a.nombre_publico||'Clienta')}</strong><small>${e(appointmentServiceLabel(a))} · ${money(a.precio_gs)}</small></div>${callLink(c?.telefono||a.telefono_publico)}<span class="status ${e(a.estado)}">${e(a.estado)}</span>${a.estado==='pendiente'?`<button class="small-button primary" data-action="done-appointment" data-id="${e(a.id)}">Hecho / cobrar</button>`:''}</div>`
   });
   const birthdayRows = birthdays.slice(0, 5).map(c => `<div class="list-row"><div class="avatar">🎂</div><div class="list-row-main"><strong>${e(c.nombre)}</strong><small>${e(datePY(c.fecha_nacimiento))}</small></div><a class="small-button primary" href="${waLink(c.telefono,templateMessage('cumple',c,{fecha:'',hora:''}))}" target="_blank" rel="noopener">Saludar</a></div>`);
   return `<div class="page-stack">${onboardingChecklist()}<div class="metrics-grid">${metric('Turnos de hoy',dayAppointments.length,'En la agenda de hoy')}${metric('Ingresos hoy',money(todayIncome),'Pagos registrados hoy')}${metric('Ingresos semana / mes',`${money(weekIncome)} / ${money(monthIncome)}`,'Abonos cobrados · mes actual')}${metric('Deuda total',money(debt),`${state.data.clientas.filter(c=>Number(c.deuda_gs)>0).length} clientas con saldo`)}</div>
     ${pending.length?`<a class="notice" href="#solicitudes"><strong>${pending.length} solicitud${pending.length>1?'es':''} de reserva pendiente${pending.length>1?'s':''}.</strong> Revisar ahora →</a>`:''}
-    ${thanksPending.length?`<section class="panel"><div class="panel-head"><div><h2>Agradecimientos pendientes</h2><p class="muted tiny">Turnos hechos en los últimos tres días.</p></div></div><div class="list">${thanksPending.map(a=>{const c=clientById(a.clienta_id),phone=c?.telefono||a.telefono_publico;return `<div class="list-row"><div class="list-row-main"><strong>${e(c?.nombre||a.nombre_publico||'Clienta')}</strong><small>${datePY(a.fecha)} · ${e(serviceById(a.servicio_id)?.nombre||'Servicio')}</small></div><div class="table-actions">${callLink(phone)}${phone?`<button class="small-button primary" data-action="send-thanks" data-id="${e(a.id)}">WhatsApp</button>`:''}<button class="small-button" data-action="mark-thanks" data-id="${e(a.id)}">Marcar enviado</button></div></div>`}).join('')}</div></section>`:''}
+    ${thanksPending.length?`<section class="panel"><div class="panel-head"><div><h2>Agradecimientos pendientes</h2><p class="muted tiny">Turnos hechos en los últimos tres días.</p></div></div><div class="list">${thanksPending.map(a=>{const c=clientById(a.clienta_id),phone=c?.telefono||a.telefono_publico;return `<div class="list-row"><div class="list-row-main"><strong>${e(c?.nombre||a.nombre_publico||'Clienta')}</strong><small>${datePY(a.fecha)} · ${e(appointmentServiceLabel(a))}</small></div><div class="table-actions">${callLink(phone)}${phone?`<button class="small-button primary" data-action="send-thanks" data-id="${e(a.id)}">WhatsApp</button>`:''}<button class="small-button" data-action="mark-thanks" data-id="${e(a.id)}">Marcar enviado</button></div></div>`}).join('')}</div></section>`:''}
     <div class="content-grid"><section class="panel"><div class="panel-head"><h2>Agenda de hoy</h2><a href="#agenda">Ver agenda →</a></div><div class="list">${scheduleRows.join('')||empty('Un día para organizar','Todavía no tenés turnos para hoy. Agregá uno o compartí tu link de reservas.','▦')}</div><div class="toolbar mt-1"><button class="button primary" data-action="new-appointment">＋ Nuevo turno</button><button class="button soft" data-action="share-booking">Compartir reservas</button></div></section><section class="panel"><div class="panel-head"><h2>Cumpleaños de la semana</h2><span>🎂</span></div><div class="list">${birthdayRows.join('')||empty('Esta semana está tranquila','Los próximos cumpleaños van a aparecer acá.','🎂')}</div></section></div>
     <section class="panel"><div class="panel-head"><div><h2>Accesos rápidos</h2><p class="muted tiny">Lo que necesitás, a mano.</p></div></div><div class="toolbar"><button class="button soft" data-action="new-client">＋ Agregar clienta</button><button class="button soft" data-action="share-catalog">Compartir catálogo</button><a class="button ghost" href="#recordatorios">Turnos de mañana</a><button class="button ghost" data-action="backup-json">Descargar respaldo</button></div></section></div>`;
 }
@@ -578,10 +610,10 @@ function renderAgenda() {
     const min = shift ? Number(shift.inicio.slice(0,2))*60+Number(shift.inicio.slice(3,5)) : start;
     const max = shift ? Number(shift.fin.slice(0,2))*60+Number(shift.fin.slice(3,5)) : end;
     const blocks = state.data.turnos.filter(a=>a.fecha===day).map(a=>{
-      const svc=serviceById(a.servicio_id), c=clientById(a.clienta_id), minute=Number(a.hora.slice(0,2))*60+Number(a.hora.slice(3,5));
-      const duration=Number(svc?.duracion_min||60), top=(minute-start)/60*rowHeight, height=Math.max(38,duration/60*rowHeight-3);
+      const c=clientById(a.clienta_id), minute=Number(a.hora.slice(0,2))*60+Number(a.hora.slice(3,5));
+      const duration=appointmentDuration(a), top=(minute-start)/60*rowHeight, height=Math.max(38,duration/60*rowHeight-3);
       const debt=outstandingTurnDebt(a);
-      return `<button type="button" class="cal-event state-${e(a.estado)} ${debt?'has-debt':''} ${a.empleada_id?'staff-'+(state.data.empleadas.findIndex(x=>x.id===a.empleada_id)%5):''}" title="${debt?`Saldo pendiente: ${money(debt)}`:''}" style="top:${top}px;height:${height}px" data-action="appointment-details" data-id="${e(a.id)}" data-drag-id="${e(a.id)}"><strong>${e(timePY(a.hora))} · ${e(c?.nombre||a.nombre_publico||'Clienta')}</strong><span>${e(svc?.nombre||'Servicio')}</span>${debt?`<span class="cal-debt">Debe ${money(debt)}</span>`:''}</button>`;
+      return `<button type="button" class="cal-event state-${e(a.estado)} ${debt?'has-debt':''} ${a.empleada_id?'staff-'+(state.data.empleadas.findIndex(x=>x.id===a.empleada_id)%5):''}" title="${debt?`Saldo pendiente: ${money(debt)}`:''}" style="top:${top}px;height:${height}px" data-action="appointment-details" data-id="${e(a.id)}" data-drag-id="${e(a.id)}"><strong>${e(timePY(a.hora))} · ${e(c?.nombre||a.nombre_publico||'Clienta')}</strong><span>${e(appointmentServiceLabel(a))}</span>${debt?`<span class="cal-debt">Debe ${money(debt)}</span>`:''}</button>`;
     }).join('');
     const isToday=day===dateInput(), nowParts=new Intl.DateTimeFormat('en-GB',{timeZone:'America/Asuncion',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()), nowMinute=Number(nowParts.find(p=>p.type==='hour')?.value||0)*60+Number(nowParts.find(p=>p.type==='minute')?.value||0);
     const nowLine=isToday&&nowMinute>=start&&nowMinute<=end?`<i class="cal-now" style="top:${(nowMinute-start)/60*rowHeight}px" aria-label="Hora actual"></i>`:'';
@@ -611,10 +643,10 @@ function callLink(phone, label = 'Llamar') {
 function minutesOf(time) { const [h,m]=String(time||'00:00').slice(0,5).split(':').map(Number); return h*60+m; }
 function timeAtMinutes(value) { const m=Math.max(0,Math.round(value/15)*15); return `${String(Math.floor(m/60)%24).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; }
 function turnOverlap(candidate, exceptId = null) {
-  const duration=Number(serviceById(candidate.servicio_id)?.duracion_min||60), start=minutesOf(candidate.hora), end=start+duration;
+  const duration=appointmentDuration(candidate), start=minutesOf(candidate.hora), end=start+duration;
   return state.data.turnos.find(t=>t.id!==exceptId&&t.fecha===candidate.fecha&&t.estado!=='cancelado'&&
     (!candidate.empleada_id || !t.empleada_id || t.empleada_id===candidate.empleada_id) &&
-    start<minutesOf(t.hora)+Number(serviceById(t.servicio_id)?.duracion_min||60)&&minutesOf(t.hora)<end);
+    start<minutesOf(t.hora)+appointmentDuration(t)&&minutesOf(t.hora)<end);
 }
 
 async function onCalendarPointerDown(ev) {
@@ -687,7 +719,7 @@ function renderReminders() {
       fecha: datePY(a.fecha),
       hora: timePY(a.hora)
     }));
-    return `<tr><td>${e(timePY(a.hora))}</td><td>${e(c?.nombre||a.nombre_publico||'Clienta')}</td><td>${e(phone||'Sin teléfono')}</td><td>${e(serviceById(a.servicio_id)?.nombre||'Servicio')}</td><td>${hasSent?'<span class="status hecho">Enviado</span>':`<div class="table-actions"><a class="small-button primary" href="${url}" target="_blank" rel="noopener">Enviar WhatsApp</a><button class="small-button" data-action="mark-reminder" data-id="${e(a.id)}">Marcar enviado</button></div>`}</td></tr>`
+    return `<tr><td>${e(timePY(a.hora))}</td><td>${e(c?.nombre||a.nombre_publico||'Clienta')}</td><td>${e(phone||'Sin teléfono')}</td><td>${e(appointmentServiceLabel(a))}</td><td>${hasSent?'<span class="status hecho">Enviado</span>':`<div class="table-actions"><a class="small-button primary" href="${url}" target="_blank" rel="noopener">Enviar WhatsApp</a><button class="small-button" data-action="mark-reminder" data-id="${e(a.id)}">Marcar enviado</button></div>`}</td></tr>`
   });
   return `${heading('Turnos de mañana','Recordatorios',`<button class="button soft" data-action="send-all-reminders">Abrir siguiente mensaje</button>`)}<p class="muted">Abrí una conversación por vez. Después de enviar el mensaje desde WhatsApp, marcá esa fila y seguí con la siguiente.</p>${table(['Hora','Clienta','Teléfono','Servicio','Mensaje'],rows)}`;
 }
@@ -735,12 +767,14 @@ function summarizeCashClose(cash) {
   const services = new Map();
   const employees = new Map();
   for (const appointment of completed) {
-    const serviceId = appointment.servicio_id || 'sin-servicio';
-    const serviceName = serviceById(appointment.servicio_id)?.nombre || 'Servicio';
-    const service = services.get(serviceId) || { name: serviceName, count: 0, total: 0 };
-    service.count += 1;
-    service.total += Number(appointment.precio_cierre_gs ?? appointment.precio_gs ?? 0);
-    services.set(serviceId, service);
+    const lines=(cash.turnoServices||[]).filter(line=>line.turno_id===appointment.id);
+    const items=lines.length?lines.map(line=>({id:line.servicio_id||line.servicio_nombre,nombre:line.servicio_nombre,precio_gs:Number(line.precio_gs||0)})):appointmentServices(appointment);
+    const allocated=allocateServiceAmount(Number(appointment.precio_cierre_gs??appointment.precio_gs??0),items);
+    for(const item of allocated){
+      const serviceId=item.service.id||item.service.nombre||'sin-servicio';
+      const service=services.get(serviceId)||{name:item.service.nombre||'Servicio',count:0,total:0};
+      service.count+=1; service.total+=item.amount; services.set(serviceId,service);
+    }
 
     if (appointment.empleada_id) {
       const employee = employeeById(appointment.empleada_id);
@@ -808,17 +842,22 @@ async function loadCashClose(date, force = false) {
     }
     const appointments = appointmentsResult.data || [];
     const completedIds = appointments.filter(appointment => appointment.estado === 'hecho').map(appointment => appointment.id);
-    let servicePayments = [];
+    let servicePayments = [], turnoServices = [];
     if (completedIds.length) {
-      const servicePaymentsResult = await supabase.from('pagos')
-        .select('turno_id,monto_gs').in('turno_id', completedIds);
+      const [servicePaymentsResult,turnoServicesResult] = await Promise.all([
+        supabase.from('pagos').select('turno_id,monto_gs').in('turno_id', completedIds),
+        supabase.from('turno_servicios').select('turno_id,servicio_id,servicio_nombre,precio_gs,duracion_min,orden').in('turno_id', completedIds).order('orden')
+      ]);
       if (servicePaymentsResult.error) throw servicePaymentsResult.error;
+      if (turnoServicesResult.error) throw turnoServicesResult.error;
       servicePayments = servicePaymentsResult.data || [];
+      turnoServices = turnoServicesResult.data || [];
     }
     if (requestId === state.cashLoadId) {
       state.cashData = {
         date,
         appointments,
+        turnoServices,
         payments: paymentsResult.data || [],
         servicePayments,
         expenses: expensesResult.data || []
@@ -861,10 +900,10 @@ function renderGlobalSearch(query) {
   clearTimeout(state.searchTimer);
   state.searchTimer=setTimeout(()=>{
     const clients=state.data.clientas.filter(c=>foldText(`${c.nombre} ${c.telefono}`).includes(q)).slice(0,8);
-    const appointments=state.data.turnos.filter(a=>foldText(`${clientById(a.clienta_id)?.nombre||a.nombre_publico||''} ${serviceById(a.servicio_id)?.nombre||''} ${datePY(a.fecha)} ${a.fecha}`).includes(q)).slice(0,8);
+    const appointments=state.data.turnos.filter(a=>foldText(`${clientById(a.clienta_id)?.nombre||a.nombre_publico||''} ${appointmentServiceLabel(a)} ${datePY(a.fecha)} ${a.fecha}`).includes(q)).slice(0,8);
     const services=state.data.servicios.filter(s=>foldText(s.nombre).includes(q)).slice(0,8);
     state.searchResults=[...clients.map(x=>({kind:'client',item:x})),...appointments.map(x=>({kind:'appointment',item:x})),...services.map(x=>({kind:'service',item:x}))];state.searchActive=0;
-    const groups=[['client','Clientas','♡',x=>`${x.nombre} · ${x.telefono||'Sin teléfono'}`],['appointment','Turnos','▦',x=>`${datePY(x.fecha)} ${timePY(x.hora)} · ${clientById(x.clienta_id)?.nombre||x.nombre_publico||'Clienta'} · ${serviceById(x.servicio_id)?.nombre||'Servicio'}`],['service','Servicios','✦',x=>`${x.nombre} · ${money(x.precio_gs)}`]];
+    const groups=[['client','Clientas','♡',x=>`${x.nombre} · ${x.telefono||'Sin teléfono'}`],['appointment','Turnos','▦',x=>`${datePY(x.fecha)} ${timePY(x.hora)} · ${clientById(x.clienta_id)?.nombre||x.nombre_publico||'Clienta'} · ${appointmentServiceLabel(x)}`],['service','Servicios','✦',x=>`${x.nombre} · ${money(x.precio_gs)}`]];
     const html=groups.map(([kind,label,icon,text])=>{const items=state.searchResults.filter(r=>r.kind===kind);return items.length?`<section><h3>${icon} ${label}</h3>${items.map((r,i)=>`<button role="option" aria-selected="${state.searchActive===state.searchResults.indexOf(r)}" id="global-search-option-${state.searchResults.indexOf(r)}" class="search-result" data-action="global-search-result" data-kind="${kind}" data-id="${e(r.item.id)}"><span>${e(text(r.item))}</span><span aria-hidden="true">↗</span></button>`).join('')}</section>`:''}).join('');
     target.innerHTML=html||'<p class="empty-state">No encontramos coincidencias.</p>'; $('#global-search-input').setAttribute('aria-activedescendant',state.searchResults.length?'global-search-option-0':'');
   },250);
@@ -920,8 +959,9 @@ function renderReports() {
     employeeTotals = new Map();
   for (const payment of filtered) {
     const appointment = appointmentsById.get(payment.turno_id);
-    const sn = serviceById(appointment?.servicio_id)?.nombre || 'Servicio';
-    serviceTotals.set(sn, (serviceTotals.get(sn) || 0) + Number(payment.monto_gs || 0));
+    const services=appointment?appointmentServices(appointment):[];
+    const allocated=allocateServiceAmount(Number(payment.monto_gs||0),services);
+    for(const item of allocated){const sn=item.service.nombre||'Servicio';serviceTotals.set(sn,(serviceTotals.get(sn)||0)+item.amount);}
     const en = employeeById(appointment?.empleada_id)?.nombre || 'Sin asignar';
     employeeTotals.set(en, (employeeTotals.get(en) || 0) + Number(payment.monto_gs || 0));
   }
@@ -1156,13 +1196,13 @@ function templateMessage(key, client, extra = {}) {
 
 function appointmentDetails(id) {
   const a=state.data.turnos.find(t=>t.id===id); if(!a) return;
-  const c=clientById(a.clienta_id),service=serviceById(a.servicio_id),payments=state.data.pagos.filter(p=>p.turno_id===id),phone=c?.telefono||a.telefono_publico;
+  const c=clientById(a.clienta_id),services=appointmentServiceLabel(a),payments=state.data.pagos.filter(p=>p.turno_id===id),phone=c?.telefono||a.telefono_publico;
   const name=c?.nombre||a.nombre_publico||'Clienta';
-  const call=callLink(phone), wa=phone&&a.estado!=='cancelado'?`<a class="small-button primary" href="${e(waLink(phone,appointmentConfirmationMessage({nombre:name,fecha:a.fecha,hora:a.hora,servicio:service?.nombre})))}" target="_blank" rel="noopener">Confirmar por WhatsApp</a>`:'';
+  const call=callLink(phone), wa=phone&&a.estado!=='cancelado'?`<a class="small-button primary" href="${e(waLink(phone,appointmentConfirmationMessage({nombre:name,fecha:a.fecha,hora:a.hora,servicio:services})))}" target="_blank" rel="noopener">Confirmar por WhatsApp</a>`:'';
   const paymentActions=payments.length?`<p><strong>Cobrado:</strong> ${money(payments.reduce((n,p)=>n+Number(p.monto_gs),0))}</p>`:'';
   const undoAction=a.estado==='hecho'?`<button class="button danger" data-action="undo-payment" data-id="${e(id)}">Anular cobro / deuda</button>`:'';
   const thanks=a.agradecido_at?'<span class="status hecho">Agradecimiento enviado</span>':a.estado==='hecho'?`<button class="button soft" data-action="send-thanks" data-id="${e(id)}">Enviar agradecimiento</button>`:'';
-  showModal('Detalle del turno',`<div class="appointment-detail"><h3>${e(c?.nombre||a.nombre_publico||'Clienta')}</h3><p>${e(datePY(a.fecha))} · ${e(timePY(a.hora))}</p><p>${e(service?.nombre||'Servicio')} · ${money(a.precio_gs)} · ${Number(service?.duracion_min||60)} min</p><p><span class="status ${e(a.estado)}">${e(a.estado)}</span> · ${e(employeeById(a.empleada_id)?.nombre||'Sin empleada')}</p><div class="toolbar">${call}${wa}</div><div class="toolbar"><button class="button ghost" data-action="edit-appointment" data-id="${e(id)}">Editar</button>${a.estado==='pendiente'?`<button class="button primary" data-action="done-appointment" data-id="${e(id)}">Marcar hecho y cobrar</button><button class="button danger" data-action="cancel-appointment" data-id="${e(id)}">Cancelar turno</button>`:''}</div><div class="toolbar">${paymentActions}${undoAction}${thanks}</div></div>`,'Cerrar');
+  showModal('Detalle del turno',`<div class="appointment-detail"><h3>${e(c?.nombre||a.nombre_publico||'Clienta')}</h3><p>${e(datePY(a.fecha))} · ${e(timePY(a.hora))}</p><p>${e(services)} · ${money(a.precio_gs)} · ${appointmentDuration(a)} min</p><p><span class="status ${e(a.estado)}">${e(a.estado)}</span> · ${e(employeeById(a.empleada_id)?.nombre||'Sin empleada')}</p><div class="toolbar">${call}${wa}</div><div class="toolbar"><button class="button ghost" data-action="edit-appointment" data-id="${e(id)}">Editar</button>${a.estado==='pendiente'?`<button class="button primary" data-action="done-appointment" data-id="${e(id)}">Marcar hecho y cobrar</button><button class="button danger" data-action="cancel-appointment" data-id="${e(id)}">Cancelar turno</button>`:''}</div><div class="toolbar">${paymentActions}${undoAction}${thanks}</div></div>`,'Cerrar');
   $('#modal-footer').innerHTML='<button class="button ghost" type="button" data-modal-close>Cerrar</button>';
 }
 
@@ -1177,7 +1217,7 @@ function thanksMessage(turn) {
   let content=template?.contenido||TEMPLATES.find(x=>x[0]==='agradecimiento')[2];
   if(!state.profile?.google_review_url) content=content.replace(/\s*¿Nos dejás una reseña\?\s*\{resena\}/i,'');
   return fillTemplate(content,{
-    nombre:client.nombre,salon:salonName(),servicio:serviceById(turn.servicio_id)?.nombre||'servicio',
+    nombre:client.nombre,salon:salonName(),servicio:appointmentServiceLabel(turn),
     resena:state.profile?.google_review_url?`\n${state.profile.google_review_url}`:''
   }).replace(/\s*\{resena\}/g,'').trim();
 }
@@ -1443,28 +1483,44 @@ function newServiceForm(service = {}) {
 
 function appointmentForm(item = {}) {
   const edit = !!item.id;
+  if(item.estado==='hecho') return toast('Los turnos realizados no se pueden editar. Anulá el cobro si necesitás corregirlo.','error');
+  const currentServiceIds=(state.data.turno_servicios||[]).filter(row=>row.turno_id===item.id).sort((a,b)=>Number(a.orden||0)-Number(b.orden||0)).map(row=>row.servicio_id).filter(Boolean);
+  if(!currentServiceIds.length&&item.servicio_id) currentServiceIds.push(item.servicio_id);
+  const offeredServices=state.data.servicios.filter(service=>service.activo||currentServiceIds.includes(service.id));
+  const serviceChoices=offeredServices.map(service=>{const price=Number(service.precio_gs)||0,duration=Number(service.duracion_min)||60;return `<label class="check-field"><input type="checkbox" name="servicio_ids" value="${e(service.id)}" data-price="${price}" data-duration="${duration}" ${currentServiceIds.includes(service.id)?'checked':''}>${e(service.nombre)} · ${money(price)} · ${duration} min</label>`}).join('');
+  const selectedServices=offeredServices.filter(service=>currentServiceIds.includes(service.id));
+  const initialPrice=selectedServices.reduce((sum,service)=>sum+Number(service.precio_gs||0),0);
+  const initialDuration=selectedServices.reduce((sum,service)=>sum+Number(service.duracion_min||60),0);
   const statusOptions=item.estado==='hecho'?[['hecho','Hecho']]:[['pendiente','Pendiente'],['cancelado','Cancelado']];
-  showModal(edit ? 'Editar turno' : 'Nuevo turno', `<form id="entity-form" class="form-grid">${selectField('Clienta','clienta_id',clientsSorted().map(c=>[c.id,c.nombre]),item.clienta_id||'')}${selectField('Servicio','servicio_id',serviceOptions(),item.servicio_id||'')}${formField('Fecha','fecha',item.fecha||state.agendaDate,'date',{required:true})}${formField('Hora','hora',timePY(item.hora)||'09:00','time',{required:true})}${formField('Precio (Gs.)','precio_gs',item.precio_gs||0,'number',{required:true,min:0})}${selectField('Empleada','empleada_id',employeeOptions(),item.empleada_id||'',false)}${selectField('Estado','estado',statusOptions,item.estado||'pendiente')}${formField('Notas','notas',item.notas||'','textarea',{wide:true,maxlength:1000})}</form>`, edit ? 'Guardar cambios' : 'Agendar turno');
+  showModal(edit ? 'Editar turno' : 'Nuevo turno', `<form id="entity-form" class="form-grid">${selectField('Clienta','clienta_id',clientsSorted().map(c=>[c.id,c.nombre]),item.clienta_id||'')}<fieldset class="service-choice-field wide"><legend>Servicios del turno</legend><div class="service-choice-grid">${serviceChoices||'<p class="muted">Primero agregá servicios al catálogo.</p>'}</div><small id="appointment-service-summary" class="muted">${currentServiceIds.length} servicio${currentServiceIds.length===1?'':'s'} · ${initialDuration} min</small></fieldset>${formField('Fecha','fecha',item.fecha||state.agendaDate,'date',{required:true})}${formField('Hora','hora',timePY(item.hora)||'09:00','time',{required:true})}<label class="field">Precio total (Gs.)<input id="appointment-total-price" name="precio_gs" type="number" value="${initialPrice||0}" readonly></label>${selectField('Empleada','empleada_id',employeeOptions(),item.empleada_id||'',false)}${selectField('Estado','estado',statusOptions,item.estado||'pendiente')}${formField('Notas','notas',item.notas||'','textarea',{wide:true,maxlength:1000})}</form>`, edit ? 'Guardar cambios' : 'Agendar turno');
   const form = $('#modal-body form');
-  form.elements.servicio_id.addEventListener('change', () => {
-    const service = serviceById(form.elements.servicio_id.value);
-    if (service) form.elements.precio_gs.value = service.precio_gs;
-  });
+  const updateServiceTotal=()=>{
+    const selected=[...form.querySelectorAll('input[name="servicio_ids"]:checked')];
+    const price=selected.reduce((sum,input)=>sum+Number(input.dataset.price||0),0);
+    const duration=selected.reduce((sum,input)=>sum+Number(input.dataset.duration||60),0);
+    form.elements.precio_gs.value=price;
+    $('#appointment-service-summary').textContent=`${selected.length} servicio${selected.length===1?'':'s'} · ${duration} min`;
+  };
+  form.querySelectorAll('input[name="servicio_ids"]').forEach(input=>input.addEventListener('change',updateServiceTotal));
   modalSubmit(async form => {
-    const r = formObject(form),
-      payload = {
+    const r = formObject(form), serviceIds=[...form.querySelectorAll('input[name="servicio_ids"]:checked')].map(input=>input.value);
+    if(!serviceIds.length) throw new Error('Elegí al menos un servicio para el turno.');
+    const selected=offeredServices.filter(service=>serviceIds.includes(service.id));
+    const payload = {
         clienta_id: r.clienta_id || null,
-        servicio_id: r.servicio_id,
+        servicio_ids: serviceIds,
+        servicio_id: serviceIds[0],
         fecha: r.fecha,
         hora: r.hora,
         precio_gs: Number(r.precio_gs),
+        duracion_min: selected.reduce((sum,service)=>sum+Number(service.duracion_min||60),0),
         empleada_id: r.empleada_id || null,
         estado: r.estado,
         notas: r.notas?.trim() || null
       };
     const overlap=turnOverlap(payload,edit?item.id:null), force=overlap?confirm(`Este horario se superpone con ${clientById(overlap.clienta_id)?.nombre||'otro turno'}. ¿Guardar igual?`):false;
     if(overlap&&!force) return;
-    const {data:turnoId,error}=await supabase.rpc('guardar_turno',{p_turno_id:edit?item.id:null,p_clienta_id:payload.clienta_id,p_servicio_id:payload.servicio_id,p_fecha:payload.fecha,p_hora:payload.hora,p_precio_gs:payload.precio_gs,p_empleada_id:payload.empleada_id,p_estado:payload.estado,p_notas:payload.notas,p_permitir_solapamiento:force});
+    const {data:turnoId,error}=await supabase.rpc('guardar_turno_multiple',{p_turno_id:edit?item.id:null,p_clienta_id:payload.clienta_id,p_servicio_ids:payload.servicio_ids,p_fecha:payload.fecha,p_hora:payload.hora,p_empleada_id:payload.empleada_id,p_estado:payload.estado,p_notas:payload.notas,p_permitir_solapamiento:force});
     if (error) throw error;
     toast(edit ? 'Turno actualizado' : 'Turno agregado');
     await refresh();
@@ -1476,7 +1532,7 @@ function appointmentForm(item = {}) {
         telefono: client?.telefono || saved?.telefono_publico,
         fecha: payload.fecha,
         hora: payload.hora,
-        servicio: serviceById(payload.servicio_id)?.nombre
+        servicio: selected.map(service=>service.nombre).join(' + ')
       });
     }
   });
@@ -1487,7 +1543,7 @@ function paymentForm(item) {
   const c = clientById(item.clienta_id);
   if(item.estado==='hecho'&&state.data.pagos.some(p=>p.turno_id===item.id)) return toast('Este turno ya tiene un pago. Abrí su detalle para ver o anular el cobro.');
   state.quickThanks=false;
-  showModal('Cobro rápido', `<form id="quick-payment-form" class="form-grid"><p class="wide muted">${e(c?.nombre||'Clienta')} · ${e(serviceById(item.servicio_id)?.nombre||'Turno')} · ${datePY(item.fecha)} ${timePY(item.hora)}</p>${formField('Monto recibido (Gs.)','monto_gs',item.precio_cierre_gs??item.precio_gs,'number',{required:true,min:0,max:item.precio_cierre_gs??item.precio_gs})}${formField('Fecha de pago','fecha',dateInput(),'date',{required:true})}<label class="check-field wide"><input name="agradecer" type="checkbox">Enviar agradecimiento por WhatsApp</label><div class="cash-methods wide"><button type="button" class="button primary" data-action="cash-medium" data-cash-medium="Efectivo" data-turn-id="${e(item.id)}">Efectivo</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Transferencia" data-turn-id="${e(item.id)}">Transferencia</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Tigo Money" data-turn-id="${e(item.id)}">Tigo Money</button><button type="button" class="button ghost" data-action="cash-medium" data-cash-medium="Otro" data-turn-id="${e(item.id)}">Otro medio</button></div><div id="other-medium-fields" class="wide" hidden>${formField('Especificá cómo pagó','otro_detalle','','text',{maxlength:60})}<button type="button" class="button primary" data-action="cash-other-confirm" data-cash-medium="Otro" data-turn-id="${e(item.id)}">Registrar pago</button></div><p class="wide muted tiny">Si abonás menos del precio, la diferencia queda como saldo pendiente en la ficha de la clienta.</p></form>`, '');
+  showModal('Cobro rápido', `<form id="quick-payment-form" class="form-grid"><p class="wide muted">${e(c?.nombre||'Clienta')} · ${e(appointmentServiceLabel(item))} · ${datePY(item.fecha)} ${timePY(item.hora)}</p>${formField('Monto recibido (Gs.)','monto_gs',item.precio_cierre_gs??item.precio_gs,'number',{required:true,min:0,max:item.precio_cierre_gs??item.precio_gs})}${formField('Fecha de pago','fecha',dateInput(),'date',{required:true})}<label class="check-field wide"><input name="agradecer" type="checkbox">Enviar agradecimiento por WhatsApp</label><div class="cash-methods wide"><button type="button" class="button primary" data-action="cash-medium" data-cash-medium="Efectivo" data-turn-id="${e(item.id)}">Efectivo</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Transferencia" data-turn-id="${e(item.id)}">Transferencia</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Tigo Money" data-turn-id="${e(item.id)}">Tigo Money</button><button type="button" class="button ghost" data-action="cash-medium" data-cash-medium="Otro" data-turn-id="${e(item.id)}">Otro medio</button></div><div id="other-medium-fields" class="wide" hidden>${formField('Especificá cómo pagó','otro_detalle','','text',{maxlength:60})}<button type="button" class="button primary" data-action="cash-other-confirm" data-cash-medium="Otro" data-turn-id="${e(item.id)}">Registrar pago</button></div><p class="wide muted tiny">Si abonás menos del precio, la diferencia queda como saldo pendiente en la ficha de la clienta.</p></form>`, '');
   $('#quick-payment-form').addEventListener('submit',ev=>ev.preventDefault());
   $('#modal-submit')?.remove(); $('#modal-footer').innerHTML='<button class="button ghost" type="button" data-modal-close>Cancelar</button>';
 }
@@ -1734,7 +1790,7 @@ async function resolveRequest(id, accept) {
       telefono: data?.telefono || saved?.telefono_publico,
       fecha: data?.fecha || saved?.fecha,
       hora: data?.hora || saved?.hora,
-      servicio: serviceById(saved?.servicio_id)?.nombre
+      servicio: appointmentServiceLabel(saved)
     });
   }
 }
@@ -1782,14 +1838,14 @@ async function clientDetails(id) {
   }));
   const history = visits.map(a => {
     const due=outstandingTurnDebt(a);
-    return `<div class="list-row ${due?'turn-has-debt':''}"><div class="list-row-main"><button class="text-button" data-action="appointment-details" data-id="${e(a.id)}"><strong>${datePY(a.fecha)} · ${e(timePY(a.hora))} · ${e(serviceById(a.servicio_id)?.nombre||'Servicio')}</strong></button><small>${e(a.estado)} · ${money(a.precio_cierre_gs??a.precio_gs)}${due?` · Saldo pendiente: ${money(due)}`:''} · ${e(a.notas||'')}</small></div>${callLink(c.telefono)}<button class="small-button" data-action="appointment-details" data-id="${e(a.id)}">Detalle</button></div>`;
+    return `<div class="list-row ${due?'turn-has-debt':''}"><div class="list-row-main"><button class="text-button" data-action="appointment-details" data-id="${e(a.id)}"><strong>${datePY(a.fecha)} · ${e(timePY(a.hora))} · ${e(appointmentServiceLabel(a))}</strong></button><small>${e(a.estado)} · ${money(a.precio_cierre_gs??a.precio_gs)}${due?` · Saldo pendiente: ${money(due)}`:''} · ${e(a.notas||'')}</small></div>${callLink(c.telefono)}<button class="small-button" data-action="appointment-details" data-id="${e(a.id)}">Detalle</button></div>`;
   }).join('') || empty('Sin historial', 'Los turnos de esta clienta aparecerán acá.');
   const photoHTML = photos.map(p => signed[p.id] ? `<div class="photo-tile"><a href="${e(signed[p.id])}" target="_blank" rel="noopener"><img src="${e(signed[p.id])}" alt="Foto ${e(p.tipo)}"><small>${e(p.tipo)}</small></a><button class="photo-delete" data-action="delete-row" data-table="fotos_clienta" data-id="${e(p.id)}" aria-label="Eliminar foto">×</button></div>` : '').join('');
   const paymentHistory = payments.map(p => `<div class="list-row"><div class="list-row-main"><strong>${datePY(p.fecha)} · ${money(p.monto_gs)}</strong><small>${e(p.medio)} · ${e(p.nota||'Abono')}</small></div></div>`).join('') || '<p class="muted tiny">Todavía no hay pagos registrados.</p>';
   const loyalty = Number(c.visitas || 0),
     goal = Number(state.profile.visitas_premio || 10),
     award = loyalty > 0 && loyalty % goal === 0;
-  const paymentButtons = visits.filter(a => a.estado !== 'cancelado').map(a => `<div class="list-row"><div class="list-row-main"><strong>${datePY(a.fecha)} · ${e(serviceById(a.servicio_id)?.nombre||'Servicio')}</strong><small>${e(a.estado)} · ${money(a.precio_gs)}</small></div><button class="small-button primary" data-action="pay-appointment" data-id="${e(a.id)}">Registrar abono</button></div>`).join('') || '<p class="muted tiny">No hay turnos para asociar un pago.</p>';
+  const paymentButtons = visits.filter(a => a.estado !== 'cancelado').map(a => `<div class="list-row"><div class="list-row-main"><strong>${datePY(a.fecha)} · ${e(appointmentServiceLabel(a))}</strong><small>${e(a.estado)} · ${money(a.precio_gs)}</small></div><button class="small-button primary" data-action="pay-appointment" data-id="${e(a.id)}">Registrar abono</button></div>`).join('') || '<p class="muted tiny">No hay turnos para asociar un pago.</p>';
   const body = `<div class="profile-layout">
     <section class="profile-side panel"><div class="avatar">${e(c.nombre.slice(0,1).toUpperCase())}</div><div><h3>${e(c.nombre)}</h3><p class="muted tiny">${e(c.telefono||'Sin teléfono')}<br>${e(c.email||'')}</p><div class="table-actions">${callLink(c.telefono)}${c.telefono?`<a class="small-button primary" href="${waLink(c.telefono,'Hola '+c.nombre)}" target="_blank" rel="noopener">WhatsApp</a>`:''}</div><strong>${money(c.deuda_gs)}</strong><small class="muted"> saldo pendiente</small></div></section>
     <section class="profile-detail"><div class="loyalty-box">💝 ${loyalty} visitas · ${award?'¡Le corresponde premio!':`${Math.max(0,goal-loyalty%goal)} para su próximo premio (${e(state.profile.premio_descripcion||'premio')})`}</div>
@@ -1933,7 +1989,7 @@ async function backupJSON() {
 }
 
 function backupCSV() {
-  for (const tableName of ['clientas', 'turnos', 'pagos', 'gastos']) {
+  for (const tableName of ['clientas', 'turnos', 'turno_servicios', 'pagos', 'gastos']) {
     const rows = state.data[tableName] || [];
     const keys = [...new Set(rows.flatMap(row => Object.keys(row)))];
     const data = [keys.map(csvEscape).join(','), ...rows.map(row => keys.map(k => csvEscape(row[k])).join(','))].join('\r\n');
