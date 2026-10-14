@@ -22,6 +22,7 @@ Fecha: 11/10/2026. Revisión del código fuente, pantallas locales, service work
 8. **El botón de cierre de sesión del admin descartaba la respuesta de Supabase.** [js/admin.js](js/admin.js) ahora maneja y muestra errores, y presenta estado de carga durante el cierre.
 9. **Se retiró la opción de instalar AgendaPorã como app.** Se eliminaron el manifiesto y los íconos exclusivos de instalación; la app conserva el service worker para uso offline.
 10. **El enlace de reservas usaba un parámetro largo.** `js/app.js` ahora genera `/reservar/SLUG`; `404.html` permite resolver esa ruta dinámica en GitHub Pages, y `js/reservar.js` sigue aceptando el formato anterior para enlaces existentes.
+11. **El slug se generaba al crear la cuenta y quedaba fijo.** `js/app.js` permite cambiarlo desde Mi salón; `supabase/migracion_14.sql` libera solo ese campo y conserva las restricciones de unicidad/formato y los controles administrativos restantes.
 
 La revisión de seguridad no encontró una política RLS que permitiera cruzar salones ni una RPC pública que devolviera datos personales. Se confirmó en [supabase/schema.sql](supabase/schema.sql) que las lecturas propias siguen habilitadas tras el vencimiento, que las escrituras dependen de `cuenta_activa()`, que los campos administrativos del perfil están protegidos y que las RPC privilegiadas fijan `search_path`. Las fotos usan carpetas privadas por UID; los endpoints públicos de reservas exponen servicios y horarios, no los datos de turnos existentes. No se encontró una clave `service_role` en el código.
 
@@ -74,7 +75,7 @@ La revisión de seguridad no encontró una política RLS que permitiera cruzar s
 
 ## 5. Pruebas manuales para calendario, caja, búsqueda y accesos rápidos
 
-Antes de comenzar, aplicá las migraciones pendientes en el orden documentado en el README. Para este flujo, confirmá que `migracion_12.sql` y `migracion_13.sql` terminaron con `Success` en **Supabase → SQL Editor → New query**. Probá con una cuenta activa y datos de prueba; para las verificaciones de rechazo, repetí los intentos con una cuenta vencida.
+Antes de comenzar, aplicá las migraciones pendientes en el orden documentado en el README. Para este flujo, confirmá que `migracion_12.sql`, `migracion_13.sql` y `migracion_14.sql` terminaron con `Success` en **Supabase → SQL Editor → New query**. Probá con una cuenta activa y datos de prueba; para las verificaciones de rechazo, repetí los intentos con una cuenta vencida.
 
 - [ ] **Calendario visual:** comparar Día/Semana con `perfiles.horarios`, anterior/siguiente/hoy y fecha seleccionada. Confirmar bloque proporcional, estado, empleada y línea de hora actual. Tocar un hueco, crear turno, mantener 300 ms y mover con dedo; repetir con mouse. Probar un choque, cancelar y guardar igualmente. Revisar que Semana se desplaza dentro de su propio contenedor a 360/390/430 px.
 - [ ] **Cobro rápido:** desde un turno pendiente, marcar hecho y elegir Efectivo, Transferencia, Tigo Money y Otro; Otro debe exigir la especificación del medio. Probar pago parcial con cada opción y verificar el saldo/visitas de la clienta, recargar y confirmar que no duplica el cobro. Abrir un turno cobrado y anular; el estado debe volver a pendiente y el saldo recalcularse. Repetir una escritura con cuenta vencida y confirmar el rechazo del servidor.
