@@ -109,6 +109,7 @@ create table if not exists public.solicitudes_reserva (
   id uuid primary key default gen_random_uuid(), user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   created_at timestamptz not null default now(), servicio_id uuid not null, fecha date not null, hora time not null,
   nombre text not null check (char_length(nombre) between 1 and 80), telefono text not null check (char_length(telefono) between 7 and 24),
+  email text, constraint solicitudes_reserva_email_check check (email is null or (char_length(email)<=160 and email ~* '^[A-Z0-9._%+-]+@[A-Z0-9.-]+[.][A-Z]{2,}$')),
   estado text not null default 'pendiente' check (estado in ('pendiente','aceptada','rechazada')),
   constraint solicitudes_servicio_fk foreign key(user_id,servicio_id) references public.servicios(user_id,id) on delete cascade,
   unique(user_id,id)
@@ -435,6 +436,29 @@ begin
   return jsonb_build_object('ok',true,'id',v_turno,'nombre',v_req.nombre,'telefono',v_req.telefono,'fecha',v_req.fecha,'hora',v_req.hora);
 end $$;
 
+-- Copia el correo opcional de la solicitud a la ficha al aceptar, sin pisar uno existente.
+create or replace function public.reserva_copiar_email_clienta()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare v_phone text; v_client uuid;
+begin
+  if new.estado <> 'aceptada' or old.estado = 'aceptada' or new.email is null then return new; end if;
+  v_phone := regexp_replace(new.telefono,'\D','','g');
+  if char_length(v_phone)=9 then v_phone:='595'||v_phone; elsif left(v_phone,1)='0' then v_phone:='595'||substr(v_phone,2); end if;
+  select c.id into v_client from public.clientas c
+    where c.user_id=new.user_id
+      and (case when char_length(regexp_replace(coalesce(c.telefono,''),'\D','','g'))=9 then '595'||regexp_replace(coalesce(c.telefono,''),'\D','','g')
+                when left(regexp_replace(coalesce(c.telefono,''),'\D','','g'),1)='0' then '595'||substr(regexp_replace(coalesce(c.telefono,''),'\D','','g'),2)
+                else regexp_replace(coalesce(c.telefono,''),'\D','','g') end)=v_phone
+    order by c.created_at limit 1;
+  if v_client is not null then
+    update public.clientas set email=new.email where id=v_client and user_id=new.user_id and nullif(btrim(email),'') is null;
+  end if;
+  return new;
+end $$;
+drop trigger if exists solicitudes_reserva_copiar_email on public.solicitudes_reserva;
+create trigger solicitudes_reserva_copiar_email after update of estado on public.solicitudes_reserva
+  for each row execute function public.reserva_copiar_email_clienta();
+
 -- Panel del producto: estas RPC nunca filtran datos si el llamante no es es_admin().
 create or replace function public.admin_dashboard()
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
@@ -605,6 +629,7 @@ grant execute on function public.public_slots(text,date,uuid) to anon,authentica
 grant execute on function public.public_request_booking(text,uuid,date,time,text,text,text) to anon,authenticated;
 revoke all on function public.crear_perfil_nuevo_usuario() from public,anon,authenticated;
 revoke all on function public.proteger_campos_perfil() from public,anon,authenticated;
+revoke all on function public.reserva_copiar_email_clienta() from public,anon,authenticated;
 revoke all on function public.proteger_saldo_clienta() from public,anon,authenticated;
 revoke all on function public.recalcular_cliente(uuid,uuid) from public,anon,authenticated;
 revoke all on function public.turno_recalcula_cliente() from public,anon,authenticated;

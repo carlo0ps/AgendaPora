@@ -153,8 +153,13 @@ async function submit(ev) {
     b = ev.submitter;
   $('#booking-error').textContent = '';
   const phone = $('#booking-phone').value.trim();
+  const email = $('#booking-email').value.trim().toLowerCase();
   if (!/^[+0-9() .-]{7,24}$/.test(phone)) {
     $('#booking-error').textContent = 'Revisá el número de teléfono.';
+    return;
+  }
+  if (email && (email.length > 160 || !$('#booking-email').validity.valid)) {
+    $('#booking-error').textContent = 'Revisá el correo o dejalo vacío.';
     return;
   }
   if ($('#booking-website').value) return;
@@ -180,6 +185,7 @@ async function submit(ev) {
       p_hora: $('#booking-time').value,
       p_nombre: $('#booking-client-name').value.trim(),
       p_telefono: phone,
+      p_email: email,
       p_website: $('#booking-website').value
     });
     if (error) throw error;
