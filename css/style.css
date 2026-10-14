@@ -483,6 +483,19 @@ align-items:center;
 gap:.75rem;
 padding:.7rem .2rem;
 border-bottom:1px solid var(--border)}
+.dashboard-appointment-row {
+display:grid;
+grid-template-columns:38px minmax(0,1fr) auto;
+align-items:center}
+.dashboard-appointment-actions {
+min-width:0;
+display:flex;
+align-items:center;
+justify-content:flex-end;
+flex-wrap:wrap;
+gap:.45rem}
+.dashboard-appointment-actions .small-button {white-space:normal;text-align:center}
+.dashboard-call {min-width:0}
 .list-row:last-child {
 border:0}
 .list-row.turn-has-debt {
@@ -1084,6 +1097,27 @@ gap:.45rem}
 flex:1}
 .toolbar .search {
 flex-basis:100%}
+.dashboard-appointment-row {
+grid-template-columns:38px minmax(0,1fr);
+align-items:start;
+gap:.55rem}
+.dashboard-appointment-row .avatar {grid-column:1;grid-row:1}
+.dashboard-appointment-row .list-row-main {grid-column:2;grid-row:1;overflow-wrap:anywhere}
+.dashboard-appointment-actions {
+grid-column:1/-1;
+width:100%;
+display:grid;
+grid-template-columns:repeat(2,minmax(0,1fr));
+align-items:center;
+gap:.45rem}
+.dashboard-appointment-actions.has-pending {grid-template-areas:"call status" "done delete"}
+.dashboard-appointment-actions:not(.has-pending) {grid-template-areas:"call status"}
+.dashboard-appointment-actions .dashboard-call {grid-area:call;min-width:0}
+.dashboard-appointment-actions .dashboard-call>a,
+.dashboard-appointment-actions>button {width:100%;min-width:0}
+.dashboard-appointment-actions>.status {grid-area:status;justify-self:start}
+.dashboard-appointment-actions>[data-action="done-appointment"] {grid-area:done}
+.dashboard-appointment-actions>[data-action="delete-appointment"] {grid-area:delete}
 .profile-side {
 padding:1rem}
 .table-wrap {

@@ -50,7 +50,7 @@ const NAV = [
   ['configuracion', '⚙', 'Mi salón']
 ];
 const TABLES = ['clientas', 'servicios', 'turnos', 'turno_servicios', 'pagos', 'plantillas', 'gastos', 'productos', 'empleadas', 'solicitudes_reserva', 'fotos_clienta'];
-const MUTATING_ACTIONS = new Set(['new-client','edit-client','new-service','edit-service','new-appointment','new-client-appointment','edit-appointment','done-appointment','pay-appointment','new-expense','new-product','edit-product','new-employee','edit-employee','delete-row','accept-request','reject-request','import-clients','save-templates','cancel-appointment','undo-payment','mark-thanks']);
+const MUTATING_ACTIONS = new Set(['new-client','edit-client','new-service','edit-service','new-appointment','new-client-appointment','edit-appointment','done-appointment','pay-appointment','new-expense','new-product','edit-product','new-employee','edit-employee','delete-row','delete-appointment','accept-request','reject-request','import-clients','save-templates','cancel-appointment','undo-payment','mark-thanks']);
 const TEMPLATES = [
   ['recordatorio', 'Recordatorio de turno', 'Hola {nombre} 😊 Te recuerdo tu turno en {salon} el {fecha} a las {hora}. ¡Te esperamos!'],
   ['deuda', 'Aviso de saldo', 'Hola {nombre}, te escribimos de {salon}. Tu saldo pendiente es {deuda}. Cualquier consulta estamos a las órdenes.'],
@@ -521,7 +521,7 @@ function renderHome() {
   const thanksPending=state.data.turnos.filter(a=>a.estado==='hecho'&&!a.agradecido_at&&a.fecha>=shiftDate(today,-3)&&a.fecha<=today).sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.hora.localeCompare(a.hora));
   const scheduleRows = dayAppointments.slice(0, 7).map(a => {
     const c = clientById(a.clienta_id);
-    return `<div class="list-row"><div class="avatar">${e((c?.nombre||a.nombre_publico||'?').slice(0,1).toUpperCase())}</div><div class="list-row-main"><strong>${e(timePY(a.hora))} · ${e(c?.nombre||a.nombre_publico||'Clienta')}</strong><small>${e(appointmentServiceLabel(a))} · ${money(a.precio_gs)}</small></div>${callLink(c?.telefono||a.telefono_publico)}<span class="status ${e(a.estado)}">${e(a.estado)}</span>${a.estado==='pendiente'?`<button class="small-button primary" data-action="done-appointment" data-id="${e(a.id)}">Hecho / cobrar</button>`:''}</div>`
+    return `<div class="list-row dashboard-appointment-row"><div class="avatar">${e((c?.nombre||a.nombre_publico||'?').slice(0,1).toUpperCase())}</div><div class="list-row-main"><strong>${e(timePY(a.hora))} · ${e(c?.nombre||a.nombre_publico||'Clienta')}</strong><small>${e(appointmentServiceLabel(a))} · ${money(a.precio_gs)}</small></div><div class="dashboard-appointment-actions ${a.estado==='pendiente'?'has-pending':''}"><span class="dashboard-call">${callLink(c?.telefono||a.telefono_publico)}</span><span class="status ${e(a.estado)}">${e(a.estado)}</span>${a.estado==='pendiente'?`<button class="small-button primary" data-action="done-appointment" data-id="${e(a.id)}">Hecho / cobrar</button><button class="small-button danger" data-action="delete-appointment" data-id="${e(a.id)}">Eliminar</button>`:''}</div></div>`
   });
   const birthdayRows = birthdays.slice(0, 5).map(c => `<div class="list-row"><div class="avatar">🎂</div><div class="list-row-main"><strong>${e(c.nombre)}</strong><small>${e(datePY(c.fecha_nacimiento))}</small></div><a class="small-button primary" href="${waLink(c.telefono,templateMessage('cumple',c,{fecha:'',hora:''}))}" target="_blank" rel="noopener">Saludar</a></div>`);
   return `<div class="page-stack">${onboardingChecklist()}<div class="metrics-grid">${metric('Turnos de hoy',dayAppointments.length,'En la agenda de hoy')}${metric('Ingresos hoy',money(todayIncome),'Pagos registrados hoy')}${metric('Ingresos semana / mes',`${money(weekIncome)} / ${money(monthIncome)}`,'Abonos cobrados · mes actual')}${metric('Deuda total',money(debt),`${state.data.clientas.filter(c=>Number(c.deuda_gs)>0).length} clientas con saldo`)}</div>
@@ -1156,9 +1156,10 @@ function appointmentDetails(id) {
   const name=c?.nombre||a.nombre_publico||'Clienta';
   const call=callLink(phone), wa=phone&&a.estado!=='cancelado'?`<a class="small-button primary" href="${e(waLink(phone,appointmentConfirmationMessage({nombre:name,fecha:a.fecha,hora:a.hora,servicio:services})))}" target="_blank" rel="noopener">Confirmar por WhatsApp</a>`:'';
   const paymentActions=payments.length?`<p><strong>Cobrado:</strong> ${money(payments.reduce((n,p)=>n+Number(p.monto_gs),0))}</p>`:'';
+  const deleteAction=a.estado==='pendiente'?(payments.length?'<p class="muted tiny">No se puede eliminar: este turno tiene pagos asociados. Cancelalo para conservar el historial.</p>':`<button class="button danger" data-action="delete-appointment" data-id="${e(id)}">Eliminar turno</button>`):'';
   const undoAction=a.estado==='hecho'?`<button class="button danger" data-action="undo-payment" data-id="${e(id)}">Anular cobro / deuda</button>`:'';
   const thanks=a.agradecido_at?'<span class="status hecho">Agradecimiento enviado</span>':a.estado==='hecho'?`<button class="button soft" data-action="send-thanks" data-id="${e(id)}">Enviar agradecimiento</button>`:'';
-  showModal('Detalle del turno',`<div class="appointment-detail"><h3>${e(c?.nombre||a.nombre_publico||'Clienta')}</h3><p>${e(datePY(a.fecha))} · ${e(timePY(a.hora))}</p><p>${e(services)} · ${money(a.precio_gs)} · ${appointmentDuration(a)} min</p><p><span class="status ${e(a.estado)}">${e(a.estado)}</span> · ${e(employeeById(a.empleada_id)?.nombre||'Sin empleada')}</p><div class="toolbar">${call}${wa}</div><div class="toolbar"><button class="button ghost" data-action="edit-appointment" data-id="${e(id)}">Editar</button>${a.estado==='pendiente'?`<button class="button primary" data-action="done-appointment" data-id="${e(id)}">Marcar hecho y cobrar</button><button class="button danger" data-action="cancel-appointment" data-id="${e(id)}">Cancelar turno</button>`:''}</div><div class="toolbar">${paymentActions}${undoAction}${thanks}</div></div>`,'Cerrar');
+  showModal('Detalle del turno',`<div class="appointment-detail"><h3>${e(c?.nombre||a.nombre_publico||'Clienta')}</h3><p>${e(datePY(a.fecha))} · ${e(timePY(a.hora))}</p><p>${e(services)} · ${money(a.precio_gs)} · ${appointmentDuration(a)} min</p><p><span class="status ${e(a.estado)}">${e(a.estado)}</span> · ${e(employeeById(a.empleada_id)?.nombre||'Sin empleada')}</p><div class="toolbar">${call}${wa}</div><div class="toolbar"><button class="button ghost" data-action="edit-appointment" data-id="${e(id)}">Editar</button>${a.estado==='pendiente'?`<button class="button primary" data-action="done-appointment" data-id="${e(id)}">Marcar hecho y cobrar</button><button class="button danger" data-action="cancel-appointment" data-id="${e(id)}">Cancelar turno</button>`:''}</div><div class="toolbar">${paymentActions}${undoAction}${thanks}${deleteAction}</div></div>`,'Cerrar');
   $('#modal-footer').innerHTML='<button class="button ghost" type="button" data-modal-close>Cerrar</button>';
 }
 
@@ -1166,6 +1167,35 @@ async function undoPayment(id) {
   if(!requireEditable()||!confirm('¿Anular el cobro y volver el turno a pendiente?')) return;
   const {error}=await supabase.rpc('anular_cobro_turno',{p_turno_id:id}); if(error) throw error;
   toast('Cobro anulado y saldo recalculado'); $('#modal').close(); await refresh();
+}
+
+async function deletePendingAppointment(id) {
+  if (!requireEditable()) return;
+  const appointment = state.data.turnos.find(turn => turn.id === id);
+  if (!appointment || appointment.estado !== 'pendiente') {
+    toast('Solo se pueden eliminar turnos pendientes.', 'error');
+    return;
+  }
+  if (state.data.pagos.some(payment => payment.turno_id === id)) {
+    toast('Este turno tiene pagos asociados. Cancelalo para conservar el historial.', 'error');
+    return;
+  }
+  const client = clientById(appointment.clienta_id);
+  const name = client?.nombre || appointment.nombre_publico || 'la clienta';
+  if (!confirm(`¿Eliminar el turno de ${name} del ${datePY(appointment.fecha)} a las ${timePY(appointment.hora)}? Esta acción no se puede deshacer.`)) return;
+  const { data, error } = await supabase.from('turnos').delete()
+    .eq('id', id).eq('estado', 'pendiente').select('id').maybeSingle();
+  if (error) {
+    if (error.code === '23503') throw new Error('No se puede eliminar porque el turno tiene pagos asociados. Cancelalo para conservar el historial.');
+    throw error;
+  }
+  if (!data) {
+    toast('El turno ya no está pendiente o fue eliminado.', 'error');
+    return;
+  }
+  $('#modal').close();
+  toast('Turno eliminado');
+  await refresh();
 }
 
 function thanksMessage(turn) {
@@ -1618,6 +1648,7 @@ async function handleAction(ev) {
     if (action === 'cash-medium') return b.dataset.cashMedium==='Otro' ? selectOtherPayment(b) : completeQuickPayment(b);
     if (action === 'cash-other-confirm') return completeQuickPayment(b);
     if (action === 'cancel-appointment') return changeAppointment(id,{estado:'cancelado'}).then(()=>$('#modal').close());
+    if (action === 'delete-appointment') return deletePendingAppointment(id);
     if (action === 'appointment-details') return appointmentDetails(id);
     if (action === 'quick-search-open') return openGlobalSearch();
     if (action === 'quick-search-close') return $('#global-search-dialog').close();
