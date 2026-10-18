@@ -922,7 +922,7 @@ function renderReports() {
     employeeTotals.set(en, (employeeTotals.get(en) || 0) + Number(payment.monto_gs || 0));
   }
   const breakdown = map => [...map].sort((a, b) => b[1] - a[1]).map(([name, value]) => `<div class="list-row"><div class="list-row-main"><strong>${e(name)}</strong></div><strong>${money(value)}</strong></div>`).join('') || empty('Sin movimientos', 'Los pagos registrados aparecerán acá.');
-  return `${heading('Ingresos','Reportes')}<div class="toolbar"><button class="button ${state.reportMode==='dia'?'soft':'ghost'}" data-report="dia">Día</button><button class="button ${state.reportMode==='semana'?'soft':'ghost'}" data-report="semana">Semana</button><button class="button ${state.reportMode==='mes'?'soft':'ghost'}" data-report="mes">Mes</button></div><div class="metrics-grid">${metric('Ingresos del período',money(total),`${filtered.length} pagos registrados`)}</div><div class="content-grid"><section class="panel"><div class="panel-head"><h2>Ingresos por ${state.reportMode==='dia'?'hora de pago':state.reportMode==='semana'?'día':'día del mes'}</h2></div><div class="chart-box"><canvas id="income-chart" aria-label="Gráfico de ingresos"></canvas></div></section><section class="panel"><h2>Por servicio</h2><div class="list">${breakdown(serviceTotals)}</div></section><section class="panel"><h2>Por empleada</h2><div class="list">${breakdown(employeeTotals)}</div></section></div>`;
+  return `${heading('Ingresos','Reportes')}<div class="toolbar"><button class="button ${state.reportMode==='dia'?'soft':'ghost'}" data-report="dia">Día</button><button class="button ${state.reportMode==='semana'?'soft':'ghost'}" data-report="semana">Semana</button><button class="button ${state.reportMode==='mes'?'soft':'ghost'}" data-report="mes">Mes</button></div><div class="metrics-grid">${metric('Ingresos del período',money(total),`${filtered.length} pagos registrados`)}</div><div class="content-grid"><section class="panel"><div class="panel-head"><h2>Ingresos por ${state.reportMode==='dia'?'hora de pago':state.reportMode==='semana'?'día':'día del mes'}</h2></div><div class="chart-box"><div class="chart-legend" aria-hidden="true"><span><i class="chart-legend-ember"></i>Ingresos</span><span><i class="chart-legend-brass"></i>Promedio</span></div><canvas id="income-chart" aria-label="Gráfico lineal de ingresos con referencia de promedio"></canvas></div></section><section class="panel"><h2>Por servicio</h2><div class="list">${breakdown(serviceTotals)}</div></section><section class="panel"><h2>Por empleada</h2><div class="list">${breakdown(employeeTotals)}</div></section></div>`;
 }
 
 function renderExpenses() {
@@ -1243,17 +1243,20 @@ function drawChart(labels, values) {
     pad = {
       l: 12,
       r: 12,
-      t: 18,
+      t: 42,
       b: 24
     },
     max = Math.max(...values, 1),
     n = values.length,
     slot = (w - pad.l - pad.r) / n,
-    bar = Math.max(3, Math.min(22, slot * .58));
+    average = n ? values.reduce((sum, value) => sum + value, 0) / n : 0,
+    plotHeight = h - pad.t - pad.b,
+    pointX = i => pad.l + i * slot + slot / 2,
+    pointY = value => h - pad.b - plotHeight * value / max;
   ctx.clearRect(0, 0, w, h);
   ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border');
-  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-muted');
-  ctx.font = '10px system-ui';
+  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--color-slate');
+  ctx.font = '12px Inter, system-ui';
   ctx.textAlign = 'center';
   for (let i = 0; i < 4; i++) {
     const y = pad.t + (h - pad.t - pad.b) * i / 3;
@@ -1262,17 +1265,37 @@ function drawChart(labels, values) {
     ctx.lineTo(w - pad.r, y);
     ctx.stroke();
   }
-  values.forEach((value, i) => {
-    const bh = (h - pad.t - pad.b) * value / max,
-      x = pad.l + i * slot + (slot - bar) / 2,
-      y = h - pad.b - bh;
-    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--primary-fill');
+  ctx.save();
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--color-brass');
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, pointY(average));
+  ctx.lineTo(w - pad.r, pointY(average));
+  ctx.stroke();
+  ctx.restore();
+  if (n) {
     ctx.beginPath();
-    ctx.roundRect(x, y, bar, Math.max(bh, 2), 4);
-    ctx.fill();
+    values.forEach((value, i) => {
+      if (i === 0) ctx.moveTo(pointX(i), pointY(value));
+      else ctx.lineTo(pointX(i), pointY(value));
+    });
+    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--color-ember-orange');
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    values.forEach((value, i) => {
+      ctx.beginPath();
+      ctx.arc(pointX(i), pointY(value), 3, 0, Math.PI * 2);
+      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--color-ember-orange');
+      ctx.fill();
+    });
+  }
+  labels.forEach((label, i) => {
     if (n <= 10 || i % 5 === 0 || i === n - 1) {
-      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-muted');
-      ctx.fillText(labels[i], x + bar / 2, h - 7);
+      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--color-slate');
+      ctx.fillText(label, pointX(i), h - 7);
     }
   });
 }

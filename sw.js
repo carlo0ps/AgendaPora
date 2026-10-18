@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'agendapora-shell-v33';
+const CACHE_VERSION = 'agendapora-shell-v34';
 const SHELL = [
   './', './index.html', './admin.html', './reservar.html', './404.html', './offline.html',
   './css/style.css', './js/config.js', './js/utils.js',
