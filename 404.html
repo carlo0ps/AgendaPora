@@ -62,11 +62,23 @@
       document.getElementById('booking-route-app').hidden = false;
     }
   </script>
-  <script type="module">
-    if (window.__bookingRouteSlug) import('./js/reservar.js').catch(() => {
-      const intro = document.getElementById('booking-intro');
-      if (intro) intro.textContent = 'No se pudo cargar la página de reservas. Actualizá e intentá de nuevo.';
-    });
+  <script>
+    if (window.__bookingRouteSlug) {
+      const bookingModule = document.createElement('script');
+      bookingModule.type = 'module';
+      bookingModule.src = new URL('js/reservar.js?v=20261018-route-fix', document.baseURI).href;
+      bookingModule.onerror = () => {
+        const intro = document.getElementById('booking-intro');
+        if (!intro) return;
+        intro.textContent = 'No se pudo cargar la página de reservas. Probá abrir este enlace alternativo.';
+        const fallback = document.createElement('a');
+        fallback.className = 'button primary';
+        fallback.href = new URL(`reservar.html?salon=${encodeURIComponent(window.__bookingRouteSlug)}`, document.baseURI).href;
+        fallback.textContent = 'Abrir reservas';
+        intro.after(fallback);
+      };
+      document.body.append(bookingModule);
+    }
   </script>
 </body>
 </html>
