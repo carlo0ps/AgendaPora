@@ -1369,3 +1369,200 @@ font-size:1.45rem}
 @media (min-width:720px) {
   .service-choice-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Editorial paper theme: quiet surfaces, precise type, and ember accents. */
+:root {
+  --text: #202020;
+  --text-muted: #4d4d4d;
+  --bg: #ffffff;
+  --surface: #efefef;
+  --border: #e8e8e8;
+  --primary: #ff682c;
+  --primary-fill: #ff682c;
+  --primary-hover: #e94d18;
+  --primary-soft: #f5f5f5;
+  --on-primary: #ffffff;
+  --on-primary-hover: #ffffff;
+  --danger: #6f3838;
+  --danger-surface: #f3eeee;
+  --danger-border: #d7caca;
+  --danger-solid: #6f3838;
+  --success: #3e5145;
+  --success-surface: #edf0ed;
+  --success-solid: #3e5145;
+  --warning: #816729;
+  --warning-surface: #f3f0e8;
+  --warning-border: #d8cfb9;
+  --warning-solid: #816729;
+  --focus-ring: #ff682c;
+  --glow: rgba(235, 230, 221, .45);
+  --glow-fade: rgba(235, 230, 221, 0);
+  --shadow: none;
+  --shadow-strong: 0 12px 40px rgba(32, 32, 32, .14);
+  --shadow-soft: none;
+  --backdrop: rgba(32, 32, 32, .48);
+  --radius: 8px;
+  color-scheme: light;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+body.dark {
+  --text: #f5f5f5;
+  --text-muted: #c5c5c5;
+  --bg: #202020;
+  --surface: #2b2b2b;
+  --border: #454545;
+  --primary: #ff8659;
+  --primary-fill: #ff8659;
+  --primary-hover: #ff682c;
+  --primary-soft: #383838;
+  --on-primary: #202020;
+  --on-primary-hover: #202020;
+  --danger: #e1b9b9;
+  --danger-surface: #382d2d;
+  --danger-border: #624949;
+  --danger-solid: #6f3838;
+  --success: #c2d1c5;
+  --success-surface: #2e3831;
+  --success-solid: #3e5145;
+  --warning: #ddc88e;
+  --warning-surface: #3a352a;
+  --warning-border: #62583b;
+  --warning-solid: #816729;
+  --focus-ring: #ff8659;
+  --glow: rgba(255, 104, 44, .08);
+  --glow-fade: rgba(255, 104, 44, 0);
+  --shadow-strong: 0 12px 40px rgba(0, 0, 0, .4);
+  --backdrop: rgba(0, 0, 0, .72);
+  color-scheme: dark;
+}
+body.dark .metric-card,
+body.dark .panel,
+body.dark .card,
+body.dark .login-card,
+body.dark .locked-card,
+body.dark .booking-card { background: #2b2b2b; }
+body.dark .table-wrap,
+body.dark .booking-service-option,
+body.dark .login-card input,
+body.dark .locked-card input { background: #252525; }
+body.dark .nav-link.active,
+body.dark .nav-link:hover,
+body.dark .button.soft,
+body.dark .small-button.primary { background: #383838; color: #f5f5f5; }
+body.dark .button.primary,
+body.dark .fab { background: #efefef; color: #202020; }
+body.dark .button.primary:hover { background: #fff; color: #202020; }
+body.dark th { background: #252525; }
+body.dark .cal-event { background: #3a352a; color: #f5f5f5; }
+body.dark .cal-event.has-debt { background: #3a352a; color: #f5f5f5; }
+body.dark .cal-event.state-hecho { background: #2e3831; }
+body.dark .cal-event.state-cancelado { background: #382d2d; }
+
+h1, h2, h3,
+.button, .nav-link, .brand strong, .text-button {
+  font-family: "Inter Tight", "Arial Narrow", Inter, ui-sans-serif, system-ui, sans-serif;
+  font-weight: 400;
+  letter-spacing: -.02em;
+}
+h1 { line-height: 1.05; }
+h2 { line-height: 1.15; }
+.eyebrow { color: #816729; font-weight: 500; letter-spacing: .08em; }
+a { color: var(--text); }
+a:hover { color: var(--text); text-decoration-color: #ff682c; text-underline-offset: 3px; }
+
+.sidebar { background: var(--bg); border-right-color: var(--border); padding: 1.5rem 1.15rem; }
+.sidebar .brand { padding: .4rem .4rem 1.5rem; }
+.brand img, .brand-mark { border-radius: 0; }
+.brand small { color: #828282; }
+.side-nav { gap: .35rem; }
+.nav-link { border-radius: 200px; padding: .72rem .9rem; color: #4d4d4d; }
+.nav-link.active, .nav-link:hover { background: #efefef; color: #202020; }
+.sidebar-bottom { gap: .55rem; }
+.sidebar-bottom .button { min-height: 40px; }
+.main-area { max-width: 1480px; padding: 2rem clamp(1.2rem, 4vw, 3.5rem) 4rem; }
+.topbar { max-width: 1200px; margin-bottom: 2rem; gap: 1rem; }
+.topbar .eyebrow { color: #816729; }
+.view-root { max-width: 1200px; }
+.page-stack { gap: 1.5rem; }
+.section-heading { margin: .5rem 0 1.25rem; }
+.section-heading h2, .panel-head h2 { font-size: 1.2rem; }
+
+.metric-card, .panel, .card {
+  border: 0;
+  border-radius: 8px 0 0 0;
+  box-shadow: none;
+}
+.metric-card { padding: 1.25rem 1.4rem; background: #efefef; }
+.metric-label { color: #4d4d4d; font-size: .78rem; font-weight: 500; }
+.metric-value { font-weight: 400; letter-spacing: -.03em; }
+.metric-note { color: #828282; }
+.panel { padding: clamp(1.15rem, 2vw, 1.7rem); background: #efefef; }
+.panel-head { margin-bottom: 1rem; }
+.content-grid { gap: 1.2rem; }
+.list-row { border-bottom-color: var(--border); }
+.list-row.turn-has-debt { border-radius: 6px 0 0 0; }
+.avatar { border-radius: 50%; background: #e8e8e8; font-weight: 500; }
+.table-wrap { border: 0; border-radius: 8px 0 0 0; box-shadow: none; background: #fff; }
+th { background: #f5f5f5; font-weight: 500; }
+th, td { border-bottom-color: #e8e8e8; }
+
+.button { min-height: 42px; padding: .62rem 1rem; border-radius: 0; font-weight: 400; transition: background-color .15s, color .15s, border-color .15s; }
+.button:hover { transform: none; }
+.button.primary { background: #202020; color: #fff; }
+.button.primary:hover { background: #4d4d4d; color: #fff; }
+.button.soft { background: #e8e8e8; color: #202020; }
+.button.soft:hover { background: #dedede; }
+.button.ghost { border-color: #202020; color: #202020; }
+body.dark .button.ghost { border-color: #c5c5c5; color: #f5f5f5; }
+.small-button { border-radius: 0; font-weight: 500; }
+.small-button.primary { color: #202020; background: #e8e8e8; }
+.icon-button { border-radius: 0; }
+.fab { border-radius: 0; background: #202020; color: #fff; box-shadow: none; }
+.quick-action-menu .button { box-shadow: none; }
+.text-button { color: #202020; font-weight: 400; text-decoration: underline; text-decoration-color: #ff682c; text-underline-offset: 3px; }
+
+.status-pill, .status { border-radius: 20px; }
+.status.pendiente { color: #816729; background: #f3f0e8; }
+.status.hecho, .status.confirmada { color: #3e5145; background: #edf0ed; }
+.status.cancelado, .status.rechazada { color: #6f3838; background: #f3eeee; }
+.notice { border-radius: 6px 0 0 0; box-shadow: none; }
+.calendar-scroll { border-radius: 8px 0 0 0; }
+.cal-event { border-radius: 4px 0 0 0; border-color: #816729; background: #f3f0e8; }
+.cal-event.has-debt { background: #f3f0e8; border-color: #ff682c; color: #202020; }
+.cal-event .cal-debt { color: #ff682c; }
+.cal-event.state-hecho { background: #edf0ed; border-color: #68796d; }
+.cal-event.state-cancelado { background: #f3eeee; border-color: #987777; }
+.cal-now, .cal-now::before { background: #ff682c; }
+
+input, select, textarea, .toolbar input, .toolbar select, .field input, .field select, .field textarea, .input {
+  border-radius: 0;
+  border-color: #d6d6d6;
+}
+.field { font-size: .88rem; font-weight: 500; }
+.modal { border-radius: 8px 0 0 0; box-shadow: var(--shadow-strong); }
+.mobile-menu-dialog { border-radius: 8px 0 0 0; }
+.mobile-menu-nav .nav-link { border-radius: 200px; }
+.bottom-nav { background: var(--bg); }
+.bottom-nav .nav-link { border-radius: 200px; }
+.booking-page { background: #fff; }
+.booking-shell { width: min(100% - 2rem, 900px); padding: clamp(2rem, 8vh, 5rem) 0; }
+.booking-card { border: 0; border-radius: 8px 0 0 0; padding: clamp(1.5rem, 6vw, 3.5rem); background: #efefef; box-shadow: none; }
+.booking-card h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 400; }
+.booking-service-option { border-radius: 6px 0 0 0; background: #fff; }
+.booking-service-option:has(input:checked) { border-color: #ff682c; box-shadow: inset 0 0 0 1px #ff682c; }
+.booking-service-option input { accent-color: #ff682c; }
+.booking-footer { color: #828282; }
+.login-card, .locked-card { border: 0; border-radius: 8px 0 0 0; box-shadow: none; background: #efefef; }
+.login-card input, .locked-card input { border-radius: 0; background: #fff; }
+.login-screen, .locked-screen { background: #fff; }
+body.dark .login-screen,
+body.dark .locked-screen,
+body.dark .booking-page { background: #202020; }
+
+@media (max-width: 720px) {
+  .main-area { padding: 1.2rem .9rem calc(88px + env(safe-area-inset-bottom)); }
+  .panel { padding: 1rem; }
+  .bottom-nav { border-top-color: var(--border); }
+  .bottom-nav .nav-link.active { background: #efefef; }
+  body.dark .bottom-nav .nav-link.active { background: #383838; }
+}
