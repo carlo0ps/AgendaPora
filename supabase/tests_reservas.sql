@@ -8,7 +8,7 @@ declare
   v_user uuid:=gen_random_uuid(); v_slug text; v_today date:=(now() at time zone 'America/Asuncion')::date;
   v_booking_day date; v_second_day date; v_closed_day date; v_special_day date; v_special_open_day date; v_week jsonb;
   v_day_key text; v_local_now timestamp; v_near_time time; v_rule text; v_ok boolean;
-  v_service_short uuid; v_service_90 uuid; v_service_180 uuid; v_employee_a uuid; v_employee_b uuid;
+  v_service_short uuid; v_service_90 uuid; v_service_180 uuid; v_employee_a uuid; v_employee_b uuid; v_done_turno uuid;
   v_phone text; v_race_ok boolean:=false; v_invalid_ok boolean:=false; v_message text;
 begin
   v_slug:='reservas-test-'||left(v_user::text,8);
@@ -48,7 +48,10 @@ begin
     values(v_user,v_service_short,v_booking_day,time '14:00',10000,30,v_employee_a,0,'pendiente'),
       (v_user,v_service_short,v_booking_day,time '16:00',10000,30,v_employee_a,0,'cancelado');
   insert into public.turnos(user_id,servicio_id,fecha,hora,precio_gs,duracion_min,empleada_id,buffer_min,estado)
-    values(v_user,v_service_short,v_booking_day,time '15:00',10000,30,v_employee_b,0,'hecho');
+    values(v_user,v_service_short,v_booking_day,time '15:00',10000,30,v_employee_b,0,'pendiente')
+    returning id into v_done_turno;
+  -- Los turnos hechos deben pasar por el mismo cobro rápido que usa la aplicación.
+  perform public.cobrar_turno_rapido(v_done_turno,10000,v_booking_day,'Efectivo',null);
   insert into public.turnos(user_id,servicio_id,fecha,hora,precio_gs,duracion_min,empleada_id,buffer_min,estado)
     values(v_user,v_service_180,v_second_day,time '13:00',30000,180,v_employee_a,0,'pendiente');
 
