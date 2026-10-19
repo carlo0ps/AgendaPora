@@ -12,6 +12,7 @@ begin
   delete from public.pagos where user_id=v_user;
   delete from public.turnos where user_id=v_user;
   delete from public.solicitudes_reserva where user_id=v_user;
+  delete from public.horarios_especiales where user_id=v_user;
   delete from public.gastos where user_id=v_user;
   delete from public.productos where user_id=v_user;
   delete from public.empleadas where user_id=v_user;
@@ -21,9 +22,14 @@ begin
 
   update public.perfiles set nombre='Bella Luna Estudio',slug='bella-luna-demo',email_contacto='demo@agendapora.test',
     telefono='0000000000',direccion='Barrio Demo · Asunción',color_principal='#a84462',horario_texto='Lun a sáb · 08:00 a 18:00',
-    horarios='{"1":{"inicio":"08:00","fin":"18:00"},"2":{"inicio":"08:00","fin":"18:00"},"3":{"inicio":"08:00","fin":"18:00"},"4":{"inicio":"08:00","fin":"18:00"},"5":{"inicio":"08:00","fin":"18:00"},"6":{"inicio":"08:00","fin":"16:00"}}'::jsonb,
+    horarios='{"1":{"inicio":"08:00","fin":"18:00","pausa_inicio":"12:00","pausa_fin":"13:00"},"2":{"inicio":"08:00","fin":"18:00","pausa_inicio":"12:00","pausa_fin":"13:00"},"3":{"inicio":"08:00","fin":"18:00","pausa_inicio":"12:00","pausa_fin":"13:00"},"4":{"inicio":"08:00","fin":"18:00","pausa_inicio":"12:00","pausa_fin":"13:00"},"5":{"inicio":"08:00","fin":"18:00","pausa_inicio":"12:00","pausa_fin":"13:00"},"6":{"inicio":"08:00","fin":"16:00","pausa_inicio":"12:00","pausa_fin":"13:00"}}'::jsonb,
+    intervalo_reservas_min=15,anticipacion_reserva_min=120,max_dias_reserva=60,buffer_reserva_min=15,
     vence_el=(now() at time zone 'America/Asuncion')::date+90,activo=true,visitas_premio=8,premio_descripcion='Brushing de regalo',google_review_url='https://g.page/r/demo/review'
     where user_id=v_user;
+
+  insert into public.horarios_especiales(user_id,fecha,cerrado,nota)
+    values(v_user,(now() at time zone 'America/Asuncion')::date+40,true,'Feriado ficticio de demostración')
+  on conflict(user_id,fecha) do update set cerrado=true,inicio=null,fin=null,pausa_inicio=null,pausa_fin=null,nota=excluded.nota;
 
   insert into public.servicios(user_id,nombre,precio_gs,duracion_min,activo) values
     (v_user,'Corte y brushing',85000,60,true),(v_user,'Coloración completa',260000,180,true),(v_user,'Balayage',480000,240,true),
@@ -52,15 +58,19 @@ begin
   -- Catorce turnos en fechas distintas muestran historial, caja y agenda sin solapamientos.
   insert into public.turnos(user_id,clienta_id,servicio_id,empleada_id,fecha,hora,precio_gs,estado,notas,precio_cierre_gs,comision_pct_aplicada)
   select v_user,c.id,s.id,e.id,
-    (now() at time zone 'America/Asuncion')::date + case when g.i<=8 then -(g.i*3) else (g.i-8)*2 end,
-    time '09:00' + ((g.i%4)*interval '90 minutes'),s.precio_gs,
+    case when g.i<=8 then (now() at time zone 'America/Asuncion')::date-(g.i*3)
+      else (now() at time zone 'America/Asuncion')::date+(g.i-8)*2
+        + case when extract(dow from (now() at time zone 'America/Asuncion')::date+(g.i-8)*2)=0 then 1 else 0 end end,
+    time '09:00',s.precio_gs,
     case when g.i<=8 then 'hecho' else 'pendiente' end,
     case when g.i=2 then 'Fórmula: 6.3 + reflejo dorado, oxidante 20 vol.' else null end,
     case when g.i<=8 then s.precio_gs else null end,
     case when g.i<=8 then e.comision_pct else null end
   from generate_series(1,14) g(i)
   join public.clientas c on c.user_id=v_user and c.nombre=(array['Ana Martínez','Lucía González','Sofía Benítez','Micaela López','Valentina Giménez','Camila Fernández','Julieta Rojas','María Duarte','Carolina Acosta','Belén Vera','Milagros Ramírez','Agustina Ortiz','Paola Ferreira','Nadia Villalba'])[g.i]
-  join public.servicios s on s.user_id=v_user and s.nombre=(array['Corte y brushing','Coloración completa','Balayage','Manicura semipermanente','Tratamiento capilar'])[((g.i-1)%5)+1]
+  join public.servicios s on s.user_id=v_user and s.nombre=case when g.i<=8
+    then (array['Corte y brushing','Coloración completa','Balayage','Manicura semipermanente','Tratamiento capilar'])[((g.i-1)%5)+1]
+    else (array['Corte y brushing','Coloración completa','Manicura semipermanente','Tratamiento capilar'])[((g.i-9)%4)+1] end
   join public.empleadas e on e.user_id=v_user and e.nombre=case when g.i%2=0 then 'Camila Benítez' else 'Micaela Rojas' end;
 
   insert into public.pagos(user_id,turno_id,clienta_id,fecha,monto_gs,medio,nota)

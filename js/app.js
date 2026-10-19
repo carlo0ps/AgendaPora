@@ -49,8 +49,8 @@ const NAV = [
   ['empleadas', '♙', 'Equipo'],
   ['configuracion', '⚙', 'Mi salón']
 ];
-const TABLES = ['clientas', 'servicios', 'turnos', 'turno_servicios', 'pagos', 'plantillas', 'gastos', 'productos', 'empleadas', 'solicitudes_reserva', 'fotos_clienta'];
-const MUTATING_ACTIONS = new Set(['new-client','edit-client','new-service','edit-service','new-appointment','new-client-appointment','edit-appointment','done-appointment','pay-appointment','new-expense','new-product','edit-product','new-employee','edit-employee','delete-row','delete-appointment','accept-request','reject-request','import-clients','save-templates','cancel-appointment','undo-payment','mark-thanks']);
+const TABLES = ['clientas', 'servicios', 'turnos', 'turno_servicios', 'pagos', 'plantillas', 'gastos', 'productos', 'empleadas', 'solicitudes_reserva', 'horarios_especiales', 'fotos_clienta'];
+const MUTATING_ACTIONS = new Set(['new-client','edit-client','new-service','edit-service','new-appointment','new-client-appointment','edit-appointment','done-appointment','pay-appointment','new-expense','new-product','edit-product','new-employee','edit-employee','delete-row','delete-appointment','accept-request','reject-request','import-clients','save-templates','cancel-appointment','undo-payment','mark-thanks','save-special-date','delete-special-date']);
 const TEMPLATES = [
   ['recordatorio', 'Recordatorio de turno', 'Hola {nombre} 😊 Te recuerdo tu turno en {salon} el {fecha} a las {hora}. ¡Te esperamos!'],
   ['deuda', 'Aviso de saldo', 'Hola {nombre}, te escribimos de {salon}. Tu saldo pendiente es {deuda}. Cualquier consulta estamos a las órdenes.'],
@@ -160,7 +160,7 @@ function applyReadOnlyControls() {
     else control.removeAttribute('title');
   });
   const profileForm = $('#profile-form');
-  for (const form of [profileForm, $('#modal-body form')].filter(Boolean)) {
+  for (const form of [profileForm, $('#special-date-form'), $('#modal-body form')].filter(Boolean)) {
     form.querySelectorAll('input,textarea,select').forEach(control => {
       if (control.type === 'submit') return;
       if (['checkbox','file','color'].includes(control.type) || control.tagName === 'SELECT') control.disabled = readOnly;
@@ -274,13 +274,14 @@ async function getProfile() {
     const baseColumns = 'user_id,nombre,slug,telefono,direccion,logo_url,color_principal,horario_texto,horarios,vence_el,activo,visitas_premio,premio_descripcion,telefono_soporte';
     const missingColumns = new Set();
     let data = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const optionalColumns = ['onboarding_estado', 'google_review_url'].filter(column => !missingColumns.has(column));
+    const optionalProfileColumns = ['onboarding_estado', 'google_review_url','intervalo_reservas_min','anticipacion_reserva_min','max_dias_reserva','buffer_reserva_min'];
+    for (let attempt = 0; attempt < optionalProfileColumns.length + 1; attempt++) {
+      const optionalColumns = optionalProfileColumns.filter(column => !missingColumns.has(column));
       const result = await supabase.from('perfiles')
         .select([baseColumns, ...optionalColumns].join(','))
         .eq('user_id', userId).single();
       if (!result.error) { data = result.data; break; }
-      const missingColumn = ['onboarding_estado', 'google_review_url'].find(column => missingProfileColumn(result.error, column));
+      const missingColumn = optionalProfileColumns.find(column => missingProfileColumn(result.error, column));
       if (!missingColumn || missingColumns.has(missingColumn)) throw result.error;
       missingColumns.add(missingColumn);
     }
@@ -291,7 +292,11 @@ async function getProfile() {
     state.profile = {
       ...data,
       ...(state.onboardingSchemaMissing ? { onboarding_estado: 'migracion_requerida' } : {}),
-      ...(state.googleReviewSchemaMissing ? { google_review_url: null } : {})
+      ...(state.googleReviewSchemaMissing ? { google_review_url: null } : {}),
+      intervalo_reservas_min: Number(data.intervalo_reservas_min || 15),
+      anticipacion_reserva_min: Number(data.anticipacion_reserva_min ?? 120),
+      max_dias_reserva: Number(data.max_dias_reserva || 60),
+      buffer_reserva_min: Number(data.buffer_reserva_min || 0)
     };
     setBrand();
     setSubscription();
@@ -597,12 +602,23 @@ function callLink(phone, label = 'Llamar') {
 }
 
 function minutesOf(time) { const [h,m]=String(time||'00:00').slice(0,5).split(':').map(Number); return h*60+m; }
-function timeAtMinutes(value) { const m=Math.max(0,Math.round(value/15)*15); return `${String(Math.floor(m/60)%24).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; }
+function timeAtMinutes(value, date = state.agendaDate) {
+  const day=String(weekdayPY(date)), special=state.data.horarios_especiales.find(row=>row.fecha===date&&!row.cerrado),
+    hours=special?{inicio:special.inicio}:state.profile?.horarios?.[day], step=Number(state.profile?.intervalo_reservas_min)===30?30:15,
+    opening=hours?.inicio?minutesOf(hours.inicio):480, snapped=opening+Math.round((value-opening)/step)*step,
+    m=Math.max(0,Math.min(1439,snapped));
+  return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+}
 function turnOverlap(candidate, exceptId = null) {
-  const duration=appointmentDuration(candidate), start=minutesOf(candidate.hora), end=start+duration;
-  return state.data.turnos.find(t=>t.id!==exceptId&&t.fecha===candidate.fecha&&t.estado!=='cancelado'&&
-    (!candidate.empleada_id || !t.empleada_id || t.empleada_id===candidate.empleada_id) &&
-    start<minutesOf(t.hora)+appointmentDuration(t)&&minutesOf(t.hora)<end);
+  const start=minutesOf(candidate.hora), duration=appointmentDuration(candidate), buffer=Number(candidate.buffer_min??state.profile?.buffer_reserva_min??0),
+    activeEmployees=state.data.empleadas.filter(employee=>employee.activa), overlaps=t=>{
+      const existingStart=minutesOf(t.hora), existingBuffer=Number(t.buffer_min??state.profile?.buffer_reserva_min??0);
+      return start<existingStart+appointmentDuration(t)+existingBuffer&&existingStart<start+duration+buffer;
+    }, turns=state.data.turnos.filter(t=>t.id!==exceptId&&t.fecha===candidate.fecha&&['pendiente','hecho'].includes(t.estado)&&overlaps(t));
+  if(candidate.empleada_id) return turns.find(t=>!t.empleada_id||t.empleada_id===candidate.empleada_id);
+  if(!activeEmployees.length) return turns[0];
+  const blocked=activeEmployees.map(employee=>turns.find(t=>!t.empleada_id||t.empleada_id===employee.id));
+  return blocked.every(Boolean)?blocked.find(Boolean):undefined;
 }
 
 async function onCalendarPointerDown(ev) {
@@ -623,7 +639,7 @@ function calendarPointerMove(ev) {
   const grid=document.elementFromPoint(ev.clientX,ev.clientY)?.closest('.cal-day-grid');
   if(!grid) return;
   const bounds=grid.getBoundingClientRect(), current=parseInt(getComputedStyle(grid).getPropertyValue('--calendar-start')||'480',10), minutes=Math.round((ev.clientY-bounds.top+grid.scrollTop)/64*60+current);
-  const hour=timeAtMinutes(minutes); drag.preview={fecha:grid.dataset.calendarDate,hora:hour};
+  const hour=timeAtMinutes(minutes,grid.dataset.calendarDate); drag.preview={fecha:grid.dataset.calendarDate,hora:hour};
   drag.block.style.transform=`translate(${ev.clientX-drag.startX}px,${ev.clientY-drag.startY}px)`;
   drag.block.dataset.preview=`${datePY(drag.preview.fecha)} ${hour}`;
   drag.block.classList.add('has-preview');
@@ -951,8 +967,36 @@ function renderSettings() {
       defaultText
     }));
   const moreLinks = NAV.filter(([id]) => !['inicio','clientas','agenda','solicitudes','configuracion'].includes(id)).map(([id, icon, label]) => `<a class="button ghost" href="#${id}">${icon} ${e(label)}</a>`).join('');
-  return `${heading('Perfil del salón','Configuración')}<section class="panel"><div class="panel-head"><h2>Más herramientas</h2></div><div class="toolbar">${moreLinks}</div></section><div class="content-grid"><form id="profile-form" class="panel form-grid"><label class="field wide">Nombre del salón<input name="nombre" maxlength="100" required value="${e(p.nombre||'')}"></label><label class="field">Slug de reservas<input name="slug" maxlength="60" required autocomplete="off" spellcheck="false" value="${e(p.slug||'')}"><small class="muted">Solo letras sin tilde, números y guiones. Ej.: adw. Si lo cambiás, el link anterior dejará de funcionar.</small></label><label class="field">Teléfono del salón<input name="telefono" type="tel" maxlength="24" value="${e(p.telefono||'')}"></label><label class="field wide">Dirección<input name="direccion" maxlength="180" value="${e(p.direccion||'')}"></label><label class="field">Color principal<input name="color_principal" type="color" value="${e(validColor(p.color_principal)?p.color_principal:getComputedStyle(document.body).getPropertyValue('--primary-fill').trim())}"></label><label class="field">Visitas para premio<input name="visitas_premio" type="number" min="2" max="100" value="${Number(p.visitas_premio||10)}"></label><label class="field">Premio de fidelidad<input name="premio_descripcion" maxlength="100" value="${e(p.premio_descripcion||'Servicio o descuento especial')}"></label><label class="field wide">Link de reseñas de Google<input name="google_review_url" type="url" maxlength="500" placeholder="https://g.page/r/.../review" value="${e(p.google_review_url||'')}"><small class="muted">Obtenelo desde Perfil de Empresa de Google → Pedir reseñas. Usá un enlace HTTPS.</small></label><label class="field wide">Horario de atención<input name="horario_texto" maxlength="180" placeholder="Lun a sáb · 08:00 a 18:00" value="${e(p.horario_texto||'')}"></label><label class="field wide">Horario semanal para reservas (JSON)<textarea name="horarios_json" rows="5">${e(JSON.stringify(p.horarios||defaultHours(),null,2))}</textarea><small class="muted">Usá formato 24 h y días 0 domingo… 6 sábado. Ej.: {"1":{"inicio":"08:00","fin":"18:00"}}.</small></label><label class="field wide">Logo del salón<input type="file" name="logo" accept="image/png,image/jpeg,image/webp"></label><div class="field wide"><button class="button primary" type="submit">Guardar perfil</button></div></form>
-    <div class="page-stack"><section class="panel"><h2>Reservas públicas</h2><p class="muted tiny">Compartí el enlace para que tus clientas soliciten horario.</p><input class="input" readonly value="${e(bookingURL())}"><div class="toolbar"><button class="button soft" data-action="share-booking">Copiar link</button><button class="button ghost" data-action="whatsapp-booking">Compartir por WhatsApp</button></div></section><section class="panel"><h2>Fidelización</h2><p class="muted">Cada ${Number(p.visitas_premio||10)} visitas: ${e(p.premio_descripcion||'un premio especial')}.</p></section><section class="panel"><h2>Respaldo y datos</h2><p class="muted tiny">El respaldo contiene la información del salón que puede leer tu cuenta.</p><div class="toolbar"><button class="button soft" data-action="backup-json">Descargar JSON</button><button class="button ghost" data-action="backup-csv">Descargar CSV</button></div></section><section class="panel"><h2>Mensajes de WhatsApp</h2><p class="muted tiny">Editá las plantillas. Variables: {nombre}, {fecha}, {hora}, {deuda}, {salon}; agradecimiento usa también {servicio} y {resena}.</p>${templates.map(t=>`<label class="field">${e(t.label)}<textarea class="template-input" data-template="${e(t.key)}" rows="3">${e(t.row?.contenido||t.defaultText)}</textarea></label>`).join('')}<button class="button primary" data-action="save-templates">Guardar mensajes</button></section><section class="panel"><h2>Cambiar contraseña</h2><p class="muted tiny">Usá una contraseña nueva de al menos ocho caracteres.</p><form id="logged-password-form" class="password-settings-form"><label class="field">Nueva contraseña<input name="password" type="password" autocomplete="new-password" minlength="8" required></label><label class="field">Confirmar contraseña<input name="password_confirm" type="password" autocomplete="new-password" minlength="8" required></label><button class="button primary password-save" type="submit">Guardar contraseña</button><p id="logged-password-message" class="password-settings-message form-error" role="status" aria-live="polite"></p></form></section><section class="panel"><h2>Modo de pantalla</h2><p class="muted">Se guarda en este dispositivo.</p><button class="button ghost" data-action="toggle-theme">Cambiar tema</button></section></div></div>`;
+  const specialRows=[...state.data.horarios_especiales].sort((a,b)=>a.fecha.localeCompare(b.fecha)).map(row=>`<div class="list-row"><div class="list-row-main"><strong>${e(datePY(row.fecha))} · ${row.cerrado?'Cerrado':`${e(timePY(row.inicio))}–${e(timePY(row.fin))}`}</strong><small>${e(row.nota|| (row.pausa_inicio?`Pausa ${timePY(row.pausa_inicio)}–${timePY(row.pausa_fin)}`:'Horario especial'))}</small></div><button class="small-button danger" data-action="delete-special-date" data-id="${e(row.id)}">Eliminar</button></div>`).join('');
+  return `${heading('Perfil del salón','Configuración')}
+    <section class="panel"><div class="panel-head"><h2>Más herramientas</h2></div><div class="toolbar">${moreLinks}</div></section>
+    <div class="content-grid"><form id="profile-form" class="panel form-grid">
+      <label class="field wide">Nombre del salón<input name="nombre" maxlength="100" required value="${e(p.nombre||'')}"></label>
+      <label class="field">Slug de reservas<input name="slug" maxlength="60" required autocomplete="off" spellcheck="false" value="${e(p.slug||'')}"><small class="muted">Solo letras sin tilde, números y guiones. Ej.: adw. Si lo cambiás, el link anterior dejará de funcionar.</small></label>
+      <label class="field">Teléfono del salón<input name="telefono" type="tel" maxlength="24" value="${e(p.telefono||'')}"></label>
+      <label class="field wide">Dirección<input name="direccion" maxlength="180" value="${e(p.direccion||'')}"></label>
+      <label class="field">Color principal<input name="color_principal" type="color" value="${e(validColor(p.color_principal)?p.color_principal:getComputedStyle(document.body).getPropertyValue('--primary-fill').trim())}"></label>
+      <label class="field">Visitas para premio<input name="visitas_premio" type="number" min="2" max="100" value="${Number(p.visitas_premio||10)}"></label>
+      <label class="field">Premio de fidelidad<input name="premio_descripcion" maxlength="100" value="${e(p.premio_descripcion||'Servicio o descuento especial')}"></label>
+      <label class="field wide">Link de reseñas de Google<input name="google_review_url" type="url" maxlength="500" placeholder="https://g.page/r/.../review" value="${e(p.google_review_url||'')}"><small class="muted">Usá un enlace HTTPS.</small></label>
+      <label class="field wide">Horario de atención<input name="horario_texto" maxlength="180" placeholder="Lun a sáb · 08:00 a 18:00" value="${e(p.horario_texto||'')}"></label>
+      <label class="field wide">Horario semanal para reservas (JSON)<textarea name="horarios_json" rows="7">${e(JSON.stringify(p.horarios||defaultHours(),null,2))}</textarea><small class="muted">Días 0 domingo…6 sábado. Agregá pausa_inicio y pausa_fin en formato HH:MM para reservar un descanso.</small></label>
+      <label class="field">Intervalo de reservas (minutos)<select name="intervalo_reservas_min"><option value="15" ${Number(p.intervalo_reservas_min)===15?'selected':''}>15</option><option value="30" ${Number(p.intervalo_reservas_min)===30?'selected':''}>30</option></select></label>
+      <label class="field">Anticipación mínima (minutos)<input name="anticipacion_reserva_min" type="number" min="0" max="10080" step="15" value="${Number(p.anticipacion_reserva_min??120)}"></label>
+       <label class="field">Límite de reservas (días)<input name="max_dias_reserva" type="number" min="1" max="365" value="${Number(p.max_dias_reserva||60)}"></label>
+      <label class="field">Preparación entre turnos (minutos)<input name="buffer_reserva_min" type="number" min="0" max="180" step="5" value="${Number(p.buffer_reserva_min||0)}"></label>
+      <label class="field wide">Logo del salón<input type="file" name="logo" accept="image/png,image/jpeg,image/webp"></label>
+      <div class="field wide"><button class="button primary" type="submit">Guardar perfil</button></div>
+    </form>
+    <div class="page-stack">
+      <section class="panel"><h2>Reservas públicas</h2><p class="muted tiny">Compartí el enlace para que tus clientas soliciten horario.</p><input class="input" readonly value="${e(bookingURL())}"><div class="toolbar"><button class="button soft" data-action="share-booking">Copiar link</button><button class="button ghost" data-action="whatsapp-booking">Compartir por WhatsApp</button></div></section>
+      <section class="panel"><h2>Fechas especiales</h2><p class="muted tiny">Cerrá un feriado o definí un horario y una pausa para una fecha puntual. Este horario reemplaza el semanal.</p><form id="special-date-form" class="form-grid"><label class="field">Fecha<input name="fecha" type="date" required></label><label class="check-field"><input name="cerrado" type="checkbox">Cerrado todo el día</label><label class="field">Abre<input name="inicio" type="time" value="09:00"></label><label class="field">Cierra<input name="fin" type="time" value="18:00"></label><label class="field">Pausa desde<input name="pausa_inicio" type="time"></label><label class="field">Pausa hasta<input name="pausa_fin" type="time"></label><label class="field wide">Nota<input name="nota" maxlength="120" placeholder="Feriado, vacaciones o jornada especial"></label><button class="button primary field wide" type="submit">Guardar fecha</button></form><div class="list mt-1">${specialRows||'<p class="muted tiny">Todavía no hay fechas especiales cargadas.</p>'}</div></section>
+      <section class="panel"><h2>Fidelización</h2><p class="muted">Cada ${Number(p.visitas_premio||10)} visitas: ${e(p.premio_descripcion||'un premio especial')}.</p></section>
+      <section class="panel"><h2>Respaldo y datos</h2><p class="muted tiny">El respaldo contiene la información del salón que puede leer tu cuenta.</p><div class="toolbar"><button class="button soft" data-action="backup-json">Descargar JSON</button><button class="button ghost" data-action="backup-csv">Descargar CSV</button></div></section>
+      <section class="panel"><h2>Mensajes de WhatsApp</h2><p class="muted tiny">Variables: {nombre}, {fecha}, {hora}, {deuda}, {salon}; agradecimiento usa también {servicio} y {resena}.</p>${templates.map(t=>`<label class="field">${e(t.label)}<textarea class="template-input" data-template="${e(t.key)}" rows="3">${e(t.row?.contenido||t.defaultText)}</textarea></label>`).join('')}<button class="button primary" data-action="save-templates">Guardar mensajes</button></section>
+      <section class="panel"><h2>Cambiar contraseña</h2><p class="muted tiny">Usá una contraseña nueva de al menos ocho caracteres.</p><form id="logged-password-form" class="password-settings-form"><label class="field">Nueva contraseña<input name="password" type="password" autocomplete="new-password" minlength="8" required></label><label class="field">Confirmar contraseña<input name="password_confirm" type="password" autocomplete="new-password" minlength="8" required></label><button class="button primary password-save" type="submit">Guardar contraseña</button><p id="logged-password-message" class="password-settings-message form-error" role="status" aria-live="polite"></p></form></section>
+      <section class="panel"><h2>Modo de pantalla</h2><p class="muted">Se guarda en este dispositivo.</p><button class="button ghost" data-action="toggle-theme">Cambiar tema</button></section>
+    </div></div>`;
 }
 
 function validColor(value) {
@@ -969,8 +1013,10 @@ function validSchedule(value) {
   const days = Object.entries(value), timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
   return days.length > 0 && days.every(([day, hours]) => {
     if (!/^[0-6]$/.test(day) || !hours || typeof hours !== 'object' || Array.isArray(hours)) return false;
-    const start = String(hours.inicio || ''), end = String(hours.fin || '');
-    return timePattern.test(start) && timePattern.test(end) && start < end;
+    const start = String(hours.inicio || ''), end = String(hours.fin || ''), pauseStart=String(hours.pausa_inicio||''),pauseEnd=String(hours.pausa_fin||'');
+    if (!timePattern.test(start) || !timePattern.test(end) || start >= end) return false;
+    if (!pauseStart && !pauseEnd) return true;
+    return timePattern.test(pauseStart) && timePattern.test(pauseEnd) && start <= pauseStart && pauseStart < pauseEnd && pauseEnd <= end;
   });
 }
 
@@ -1020,7 +1066,7 @@ function renderOnboardingStep() {
   const contents = [
     `<div><h3>Nombre y logo del salón</h3><p class="muted">Así te van a reconocer tus clientas. El logo es opcional y podés cambiarlo después.</p></div><form id="onboarding-form" class="form-grid"><label class="field wide">Nombre del salón<input name="salon_nombre" maxlength="100" required value="${e(profile.nombre === 'Mi salón' ? '' : profile.nombre || '')}" placeholder="Ej.: Salón Bella"></label><label class="field wide">Logo del salón (opcional)<input name="salon_logo" type="file" accept="image/png,image/jpeg,image/webp"><small class="muted">PNG, JPG o WebP · máximo 2 MB.</small></label></form>`,
     `<div><h3>Servicios y precios</h3><p class="muted">Los precios sugeridos son un punto de partida. Editalos o desmarcá los que no ofrecés.</p></div><form id="onboarding-form" class="onboarding-service-list">${ONBOARDING_SERVICES.map((suggestion,i)=>{const existing=state.data.servicios.find(service=>service.nombre.toLocaleLowerCase('es')===suggestion.nombre.toLocaleLowerCase('es'));return `<div class="onboarding-service-row"><input type="checkbox" name="service-enabled" value="${i}" aria-label="Incluir ${e(suggestion.nombre)}" checked><input name="service-name-${i}" aria-label="Nombre del servicio" maxlength="100" required value="${e(existing?.nombre||suggestion.nombre)}"><input name="service-price-${i}" aria-label="Precio en guaraníes" type="number" min="0" max="100000000" step="1000" required value="${Number(existing?.precio_gs??suggestion.precio_gs)}"><input class="onboarding-duration" name="service-duration-${i}" aria-label="Duración en minutos" type="number" min="5" max="600" step="5" required value="${Number(existing?.duracion_min??suggestion.duracion_min)}"></div>`;}).join('')}</form><p class="tiny muted">Cada fila: activar, servicio, Gs. y duración en minutos.</p>`,
-    `<div><h3>Horario de atención</h3><p class="muted">Marcá los días en que abrís y ajustá las horas. Se usarán también para las reservas.</p></div><form id="onboarding-form" class="onboarding-days">${WEEKDAYS.map(([day,label])=>{const hours=(profile.horarios||defaultHours())[day]||{},checked=!!profile.horarios?.[day]||(!profile.horario_texto&&!!defaultHours()[day]);return `<div class="onboarding-day"><label class="onboarding-day-name"><input type="checkbox" name="schedule-day" value="${day}" ${checked?'checked':''}>${e(label)}</label><label class="field">Abre<input type="time" name="schedule-start-${day}" value="${e(hours.inicio||'08:00')}" aria-label="Hora de apertura ${e(label)}"></label><label class="field">Cierra<input type="time" name="schedule-end-${day}" value="${e(hours.fin||'18:00')}" aria-label="Hora de cierre ${e(label)}"></label></div>`;}).join('')}<label class="field wide">Resumen del horario<input name="schedule-label" maxlength="180" value="${e(profile.horario_texto||'')}" placeholder="Lun a sáb · 08:00 a 18:00"></label></form>`,
+    `<div><h3>Horario de atención</h3><p class="muted">Marcá los días, horarios y pausa opcional. Se usarán también para las reservas.</p></div><form id="onboarding-form" class="onboarding-days">${WEEKDAYS.map(([day,label])=>{const hours=(profile.horarios||defaultHours())[day]||{},checked=!!profile.horarios?.[day]||(!profile.horario_texto&&!!defaultHours()[day]);return `<div class="onboarding-day"><label class="onboarding-day-name"><input type="checkbox" name="schedule-day" value="${day}" ${checked?'checked':''}>${e(label)}</label><label class="field">Abre<input type="time" name="schedule-start-${day}" value="${e(hours.inicio||'08:00')}" aria-label="Hora de apertura ${e(label)}"></label><label class="field">Cierra<input type="time" name="schedule-end-${day}" value="${e(hours.fin||'18:00')}" aria-label="Hora de cierre ${e(label)}"></label><label class="field">Pausa desde<input type="time" name="schedule-break-start-${day}" value="${e(hours.pausa_inicio||'')}" aria-label="Inicio de pausa ${e(label)}"></label><label class="field">Pausa hasta<input type="time" name="schedule-break-end-${day}" value="${e(hours.pausa_fin||'')}" aria-label="Fin de pausa ${e(label)}"></label></div>`;}).join('')}<label class="field wide">Resumen del horario<input name="schedule-label" maxlength="180" value="${e(profile.horario_texto||'')}" placeholder="Lun a sáb · 08:00 a 18:00"></label></form>`,
     state.data.clientas.length
       ? `<div><h3>Primera clienta</h3><p class="muted">Ya cargaste ${state.data.clientas.length} clienta${state.data.clientas.length===1?'':'s'}. Este paso está completo.</p></div><div class="empty-state"><div class="empty-icon" aria-hidden="true">♡</div><strong>Tu agenda ya tiene una clienta</strong><span>Podés terminar el asistente.</span></div>`
       : `<div><h3>Agregá tu primera clienta</h3><p class="muted">Empezá con una ficha y completá los demás datos cuando quieras.</p></div><form id="onboarding-form" class="form-grid"><label class="field wide">Nombre completo<input name="client-name" maxlength="100" required autocomplete="name"></label><label class="field wide">Teléfono / WhatsApp (opcional)<input name="client-phone" type="tel" maxlength="24" autocomplete="tel" placeholder="09XX XXX XXX"></label></form>`
@@ -1089,7 +1135,8 @@ async function saveOnboardingStep() {
     const days = [...form.querySelectorAll('[name="schedule-day"]:checked')].map(input => input.value), horarios = {};
     for (const day of days) {
       const inicio = String(data.get(`schedule-start-${day}`) || ''), fin = String(data.get(`schedule-end-${day}`) || '');
-      horarios[day] = { inicio, fin };
+      const pausa_inicio=String(data.get(`schedule-break-start-${day}`)||''), pausa_fin=String(data.get(`schedule-break-end-${day}`)||'');
+      horarios[day] = { inicio, fin, ...(pausa_inicio||pausa_fin?{pausa_inicio,pausa_fin}:{}) };
     }
     if (!validSchedule(horarios)) return toast('Elegí al menos un día y revisá las horas de apertura y cierre.', 'error');
     const selectedDays = days.map(day=>WEEKDAYS.find(item=>item[0]===day)?.[1].slice(0,3)).join(', ');
@@ -1329,6 +1376,14 @@ function bindView() {
     });
   }
   $('#profile-form')?.addEventListener('submit', ev => saveProfile(ev).catch(error => toast(requestError(error), 'error')));
+  $('#special-date-form')?.addEventListener('submit', ev => saveSpecialDate(ev).catch(error => toast(requestError(error), 'error')));
+  $('#special-date-form')?.addEventListener('change', ev => {
+    if (ev.target.name !== 'cerrado') return;
+    for (const name of ['inicio','fin','pausa_inicio','pausa_fin']) $('#special-date-form').elements[name].disabled=ev.target.checked;
+  });
+  if ($('#special-date-form')?.elements.cerrado.checked) {
+    for (const name of ['inicio','fin','pausa_inicio','pausa_fin']) $('#special-date-form').elements[name].disabled=true;
+  }
   $('#logged-password-form')?.addEventListener('submit', changeLoggedPassword);
   $$('[data-report]').forEach(b => b.addEventListener('click', () => {
     state.reportMode = b.dataset.report;
@@ -1672,6 +1727,13 @@ async function handleAction(ev) {
     if (action === 'cash-other-confirm') return completeQuickPayment(b);
     if (action === 'cancel-appointment') return changeAppointment(id,{estado:'cancelado'}).then(()=>$('#modal').close());
     if (action === 'delete-appointment') return deletePendingAppointment(id);
+    if (action === 'delete-special-date') {
+      if (!confirm('¿Querés eliminar este horario especial?')) return;
+      const {error}=await supabase.from('horarios_especiales').delete().eq('id',id);
+      if (error) throw error;
+      toast('Fecha especial eliminada');
+      return refresh();
+    }
     if (action === 'appointment-details') return appointmentDetails(id);
     if (action === 'quick-search-open') return openGlobalSearch();
     if (action === 'quick-search-close') return $('#global-search-dialog').close();
@@ -1953,6 +2015,12 @@ async function saveProfile(ev) {
   if (!salon) return toast('Ingresá el nombre del salón.', 'error');
   if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return toast('Ingresá un slug válido, por ejemplo: adw.', 'error');
   if (!validSchedule(horarios)) return toast('Revisá el horario: elegí al menos un día y usá horas válidas de inicio y cierre.', 'error');
+  const intervalo=Number(fd.get('intervalo_reservas_min')), anticipacion=Number(fd.get('anticipacion_reserva_min')),
+    maxDias=Number(fd.get('max_dias_reserva')), buffer=Number(fd.get('buffer_reserva_min'));
+  if (![15,30].includes(intervalo)) return toast('El intervalo de reservas debe ser de 15 o 30 minutos.', 'error');
+  if (!Number.isInteger(anticipacion)||anticipacion<0||anticipacion>10080) return toast('La anticipación mínima debe estar entre 0 y 10080 minutos.', 'error');
+  if (!Number.isInteger(maxDias)||maxDias<1||maxDias>365) return toast('El límite de reservas debe estar entre 1 y 365 días.', 'error');
+  if (!Number.isInteger(buffer)||buffer<0||buffer>180) return toast('La preparación entre turnos debe estar entre 0 y 180 minutos.', 'error');
   const payload = {
     nombre: salon,
     slug,
@@ -1963,7 +2031,11 @@ async function saveProfile(ev) {
     premio_descripcion: String(fd.get('premio_descripcion')).trim(),
     ...(!state.googleReviewSchemaMissing ? { google_review_url: reviewUrl || null } : {}),
     horario_texto: String(fd.get('horario_texto')).trim() || null,
-    horarios
+    horarios,
+    intervalo_reservas_min: intervalo,
+    anticipacion_reserva_min: anticipacion,
+    max_dias_reserva: maxDias,
+    buffer_reserva_min: buffer
   };
   const {
     error
@@ -1987,6 +2059,21 @@ async function saveProfile(ev) {
     if (r.error) return toast(requestError(r.error), 'error');
   }
   toast(state.googleReviewSchemaMissing ? 'Perfil guardado. Ejecutá supabase/migracion_05.sql para habilitar el link de reseñas.' : 'Perfil y link de reservas guardados');
+  await refresh();
+}
+async function saveSpecialDate(ev) {
+  ev.preventDefault();
+  if (!requireEditable()) return;
+  const form=ev.currentTarget, data=new FormData(form), fecha=String(data.get('fecha')||''), cerrado=form.elements.cerrado.checked;
+  if (!validISODate(fecha)) return toast('Elegí una fecha válida.', 'error');
+  const inicio=cerrado?null:String(data.get('inicio')||''), fin=cerrado?null:String(data.get('fin')||''),
+    pausaInicio=cerrado?null:String(data.get('pausa_inicio')||'')||null, pausaFin=cerrado?null:String(data.get('pausa_fin')||'')||null;
+  const timePattern=/^(?:[01]\d|2[0-3]):[0-5]\d$/;
+  if (!cerrado && (!timePattern.test(inicio)||!timePattern.test(fin)||inicio>=fin)) return toast('Revisá la apertura y el cierre de la fecha especial.', 'error');
+  if (!cerrado && (!!pausaInicio!==!!pausaFin || pausaInicio&&(!timePattern.test(pausaInicio)||!timePattern.test(pausaFin)||inicio>pausaInicio||pausaInicio>=pausaFin||pausaFin>fin))) return toast('La pausa debe estar completa y dentro del horario de atención.', 'error');
+  const {error}=await supabase.from('horarios_especiales').upsert({fecha,cerrado,inicio,fin,pausa_inicio:pausaInicio,pausa_fin:pausaFin,nota:String(data.get('nota')||'').trim()||null},{onConflict:'user_id,fecha'});
+  if (error) throw error;
+  toast('Fecha especial guardada');
   await refresh();
 }
 async function backupJSON() {

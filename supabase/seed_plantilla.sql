@@ -20,6 +20,13 @@ declare
   v_user uuid;
   v_hoy date := (now() at time zone 'America/Asuncion')::date;
   v_lunes_proximo date;
+  v_proximo_habil date;
+  v_segundo_habil date;
+  v_hoy_slot time;
+  v_hora_actual timestamp;
+  v_apertura_hoy time;
+  v_cierre_hoy time;
+  v_dia_hoy integer;
   v_no_vino_disponible boolean := false;
   v_turnos_esperados integer := 55;
   v_perfil_ok boolean := false;
@@ -33,6 +40,8 @@ declare
   v_productos_ok boolean := false;
   v_solicitudes_ok boolean := false;
   v_fotos_ok boolean := false;
+  v_horarios_especiales_ok boolean := false;
+  v_config_reservas_ok boolean := false;
   v_cantidad_clientas integer := 0;
   v_cantidad_turnos integer := 0;
   v_cantidad_pagos integer := 0;
@@ -46,6 +55,18 @@ begin
   v_lunes_proximo := v_hoy + (8 - extract(isodow from v_hoy)::integer);
   if v_lunes_proximo <= v_hoy + 2 then
     v_lunes_proximo := v_lunes_proximo + 7;
+  end if;
+  v_proximo_habil:=v_hoy+1;
+  if extract(dow from v_proximo_habil)::integer=0 then v_proximo_habil:=v_proximo_habil+1; end if;
+  v_segundo_habil:=v_proximo_habil+1;
+  if extract(dow from v_segundo_habil)::integer=0 then v_segundo_habil:=v_segundo_habil+1; end if;
+  v_hora_actual:=now() at time zone 'America/Asuncion';
+  v_dia_hoy:=extract(dow from v_hoy)::integer;
+  if v_dia_hoy between 1 and 5 then v_apertura_hoy:=time '08:00'; v_cierre_hoy:=time '18:00';
+  elsif v_dia_hoy=6 then v_apertura_hoy:=time '08:00'; v_cierre_hoy:=time '16:00'; end if;
+  if v_apertura_hoy is not null and v_hora_actual::time<v_cierre_hoy-interval '120 minutes' then
+    v_hoy_slot:=v_apertura_hoy+make_interval(mins=>greatest(0,ceil(extract(epoch from (greatest(v_apertura_hoy,v_hora_actual::time+interval '120 minutes')-v_apertura_hoy))/900.0)::integer*15));
+    if v_hoy_slot+interval '60 minutes'>v_cierre_hoy then v_hoy_slot:=null; end if;
   end if;
 
   if to_regclass('auth.users') is null then
@@ -113,6 +134,12 @@ begin
     and column_name=any(array['id','user_id','servicio_id','fecha','hora','nombre','telefono','estado']::text[]);
   select count(*)=1 into v_fotos_ok from information_schema.columns
   where table_schema='public' and table_name='fotos_clienta' and column_name='user_id';
+  select count(*)=8 into v_horarios_especiales_ok from information_schema.columns
+  where table_schema='public' and table_name='horarios_especiales'
+    and column_name=any(array['user_id','fecha','cerrado','inicio','fin','pausa_inicio','pausa_fin','nota']::text[]);
+  select count(*)=4 into v_config_reservas_ok from information_schema.columns
+  where table_schema='public' and table_name='perfiles'
+    and column_name=any(array['intervalo_reservas_min','anticipacion_reserva_min','max_dias_reserva','buffer_reserva_min']::text[]);
 
   if not v_perfil_ok then raise notice 'Se omite la actualización del perfil: falta alguna columna requerida en public.perfiles.'; end if;
   if not v_clientas_ok then raise notice 'Se omite la carga de clientas: falta public.clientas o alguna columna requerida.'; end if;
@@ -125,6 +152,8 @@ begin
   if not v_productos_ok then raise notice 'Se omite la carga de productos: falta public.productos o alguna columna requerida.'; end if;
   if not v_solicitudes_ok then raise notice 'Se omite la carga de solicitudes: falta public.solicitudes_reserva o alguna columna requerida.'; end if;
   if not v_fotos_ok then raise notice 'No existe public.fotos_clienta.user_id; no se cargan fotos en esta plantilla.'; end if;
+  if not v_horarios_especiales_ok then raise notice 'Se omiten las fechas especiales: falta public.horarios_especiales o alguna columna requerida. Ejecutá migracion_16.sql.'; end if;
+  if not v_config_reservas_ok then raise notice 'Se omiten los límites configurables de reserva: faltan columnas de migracion_16.sql.'; end if;
 
   if v_turnos_ok then
     select exists(
@@ -144,6 +173,7 @@ begin
     if v_pagos_ok then delete from public.pagos where user_id=v_user; end if;
     if v_turnos_ok then delete from public.turnos where user_id=v_user; end if;
     if v_solicitudes_ok then delete from public.solicitudes_reserva where user_id=v_user; end if;
+    if v_horarios_especiales_ok then delete from public.horarios_especiales where user_id=v_user; end if;
     if v_gastos_ok then delete from public.gastos where user_id=v_user; end if;
     if v_productos_ok then delete from public.productos where user_id=v_user; end if;
     if v_empleadas_ok then delete from public.empleadas where user_id=v_user; end if;
@@ -164,7 +194,7 @@ begin
       logo_url=null,
       color_principal='#b25c7a',
       horario_texto='Lun a vie · 08:00 a 18:00 · sáb · 08:00 a 16:00',
-      horarios='{"1":{"inicio":"08:00","fin":"18:00"},"2":{"inicio":"08:00","fin":"18:00"},"3":{"inicio":"08:00","fin":"18:00"},"4":{"inicio":"08:00","fin":"18:00"},"5":{"inicio":"08:00","fin":"18:00"},"6":{"inicio":"08:00","fin":"16:00"}}'::jsonb,
+      horarios='{"1":{"inicio":"08:00","fin":"18:00","pausa_inicio":"12:00","pausa_fin":"13:00"},"2":{"inicio":"08:00","fin":"18:00","pausa_inicio":"12:00","pausa_fin":"13:00"},"3":{"inicio":"08:00","fin":"18:00","pausa_inicio":"12:00","pausa_fin":"13:00"},"4":{"inicio":"08:00","fin":"18:00","pausa_inicio":"12:00","pausa_fin":"13:00"},"5":{"inicio":"08:00","fin":"18:00","pausa_inicio":"12:00","pausa_fin":"13:00"},"6":{"inicio":"08:00","fin":"16:00","pausa_inicio":"12:00","pausa_fin":"13:00"}}'::jsonb,
       vence_el=v_hoy+365,
       activo=true,
       es_admin=false,
@@ -173,6 +203,15 @@ begin
       google_review_url='https://example.test/resena',
       onboarding_estado='completado'
     where user_id=v_user;
+  end if;
+  if v_perfil_ok and v_config_reservas_ok then
+    update public.perfiles set intervalo_reservas_min=15,anticipacion_reserva_min=120,max_dias_reserva=60,buffer_reserva_min=15
+    where user_id=v_user;
+  end if;
+  if v_horarios_especiales_ok then
+    insert into public.horarios_especiales(user_id,fecha,cerrado,nota)
+      values(v_user,v_hoy+40,true,'Feriado ficticio de la plantilla')
+    on conflict(user_id,fecha) do update set cerrado=true,inicio=null,fin=null,pausa_inicio=null,pausa_fin=null,nota=excluded.nota;
   end if;
 
   if v_servicios_ok then
@@ -263,23 +302,23 @@ begin
       union all
       select 30+g.i,25,((g.i-1)%6)+1,v_hoy-(3*g.i+2),time '09:00',1,'hecho'::text,null::text
       from generate_series(1,8) as g(i)
-      union all select 39,1,1,v_hoy,time '08:00',1,'pendiente',null::text
-      union all select 40,2,2,v_hoy,time '09:00',1,'pendiente',null::text
-      union all select 41,3,1,v_hoy+1,time '13:15',2,'pendiente',null::text
-      union all select 42,4,4,v_hoy,time '12:00',2,'pendiente',null::text
-      union all select 43,5,6,v_hoy,time '13:15',1,'pendiente',null::text
+      union all select 39,1,1,case when v_hoy_slot is null then v_lunes_proximo+3 else v_hoy end,coalesce(v_hoy_slot,time '09:00'),1,'pendiente',null::text
+      union all select 40,2,2,v_lunes_proximo+3,time '13:00',1,'pendiente',null::text
+      union all select 41,3,1,v_lunes_proximo+3,time '13:00',2,'pendiente',null::text
+      union all select 42,4,4,v_lunes_proximo+3,time '09:00',2,'pendiente',null::text
+      union all select 43,5,6,v_lunes_proximo+5,time '09:00',1,'pendiente',null::text
       union all select 44,6,2,v_hoy+2,time '13:00',1,'cancelado','Turno ficticio cancelado.'::text
-      union all select 45,6,5,v_hoy+1,time '08:00',1,'pendiente',null::text
-      union all select 46,7,3,v_hoy+1,time '09:15',2,'pendiente',null::text
-      union all select 47,8,2,v_hoy+2,time '09:00',1,'pendiente',null::text
-      union all select 48,9,4,v_hoy+1,time '14:15',2,'pendiente',null::text
+      union all select 45,6,5,v_proximo_habil,time '09:00',1,'pendiente',null::text
+      union all select 46,7,3,v_proximo_habil,time '13:00',2,'pendiente',null::text
+      union all select 47,8,2,v_segundo_habil,time '09:00',1,'pendiente',null::text
+      union all select 48,9,4,v_proximo_habil,time '09:00',2,'pendiente',null::text
       union all select 49,10,1,v_hoy+1,time '16:00',2,'cancelado','Turno ficticio cancelado.'::text
       union all select 50,10,1,v_lunes_proximo,time '09:00',1,'pendiente',null::text
-      union all select 51,11,2,v_lunes_proximo,time '10:00',2,'pendiente',null::text
+      union all select 51,11,2,v_lunes_proximo,time '13:00',2,'pendiente',null::text
       union all select 52,12,5,v_lunes_proximo+1,time '09:00',1,'pendiente',null::text
       union all select 53,13,6,v_lunes_proximo+1,time '10:15',2,'pendiente',null::text
       union all select 54,14,4,v_lunes_proximo+2,time '09:00',1,'pendiente',null::text
-      union all select 55,15,3,v_lunes_proximo+2,time '10:15',2,'pendiente',null::text
+      union all select 55,15,3,v_lunes_proximo+2,time '13:00',2,'pendiente',null::text
       union all
       select 56,16,1,v_lunes_proximo+4,time '16:00',1,'no_vino','Ejemplo ficticio de inasistencia.'::text
       where v_no_vino_disponible
@@ -375,7 +414,7 @@ begin
     insert into public.solicitudes_reserva as actual(id,user_id,servicio_id,fecha,hora,nombre,telefono,estado) values
       (md5(v_user::text||':solicitud:1')::uuid,v_user,
         (select s.id from public.servicios s where s.user_id=v_user and s.nombre='Corte y brushing'),
-        v_lunes_proximo+3,time '10:00','Reserva Plantilla A','0900-050-001','pendiente'),
+        v_lunes_proximo+3,time '11:00','Reserva Plantilla A','0900-050-001','pendiente'),
       (md5(v_user::text||':solicitud:2')::uuid,v_user,
         (select s.id from public.servicios s where s.user_id=v_user and s.nombre='Manicura semipermanente'),
         v_lunes_proximo+4,time '10:00','Reserva Plantilla B','0900-050-002','pendiente')

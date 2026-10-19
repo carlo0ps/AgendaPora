@@ -9,7 +9,6 @@ import {
   $,
   escapeHTML as e,
   money,
-  dateInput,
   toast,
   setBusy,
   requestError,
@@ -26,6 +25,26 @@ let supabase, salonSlug = pathSlug || new URLSearchParams(location.search).get('
   salon = null,
   slotsRequest = 0,
   availableSlots = [];
+
+function paraguayDateInput(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en', { timeZone: 'America/Asuncion', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+function shiftISODate(value, days) {
+  const [year,month,day]=value.split('-').map(Number), date=new Date(Date.UTC(year,month-1,day+days));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth()+1).padStart(2,'0')}-${String(date.getUTCDate()).padStart(2,'0')}`;
+}
+function bookingErrorMessage(error) {
+  const raw=String(error?.message||error?.details||'').toLocaleLowerCase('es');
+  if (raw.includes('ya fue tomado')||raw.includes('ya no está disponible')) return 'Ese horario ya fue tomado, elegí otro.';
+  if (raw.includes('no abre ese día')) return 'El salón no abre ese día.';
+  if (raw.includes('no entra antes del cierre')) return 'Ese servicio no entra antes del cierre.';
+  if (raw.includes('pausa')) return 'Ese horario coincide con la pausa del salón.';
+  if (raw.includes('anticipación')||raw.includes('anticipacion')) return 'Elegí un horario con más anticipación.';
+  if (raw.includes('límite de reservas')) return 'La fecha supera el límite de reservas del salón.';
+  return requestError(error);
+}
 
 function config() {
   if (SUPABASE_URL === 'SUPABASE_URL' || SUPABASE_ANON_KEY === 'SUPABASE_ANON_KEY') throw new Error('El salón todavía no publicó su agenda.');
@@ -100,8 +119,10 @@ async function loadSalon() {
   services.innerHTML = salon.servicios.map(s=>`<label class="booking-service-option"><input type="checkbox" value="${e(s.id)}"><span><strong>${e(s.nombre)}</strong><small>${money(s.precio_gs)} · ${Number(s.duracion_min)} min</small></span></label>`).join('');
   if (!salon.servicios.length) throw new Error('El salón todavía no publicó servicios disponibles.');
   renderServiceSummary();
-  $('#booking-date').min = dateInput();
-  $('#booking-date').value = dateInput();
+  const today=paraguayDateInput();
+  $('#booking-date').min = today;
+  $('#booking-date').max = shiftISODate(today,Number(salon.max_dias_reserva||60));
+  $('#booking-date').value = today;
   $('#booking-form').classList.remove('hidden');
 }
 async function loadSlots(silent = false) {
@@ -136,10 +157,18 @@ async function loadSlots(silent = false) {
     if (requestId !== slotsRequest || date !== $('#booking-date').value || servicesKey !== selectedServiceIds().join(',')) return;
     const options = (data || []).map(row => row.hora || row).map(value => String(value).slice(0, 5));
     availableSlots = [...new Set(options)];
-    select.innerHTML = availableSlots.length ? `<option value="">Elegí un horario</option>${availableSlots.map(time=>`<option value="${e(time)}">${e(time)}</option>`).join('')}` : '<option value="">No hay horarios libres</option>';
+    let emptyMessage='No hay horarios libres para ese día.';
+    if (!availableSlots.length) {
+      const statusResult=await supabase.rpc('public_booking_status',{p_slug:salonSlug,p_fecha:date,p_servicio_ids:services});
+      if (statusResult.error) throw statusResult.error;
+      const messages={closed:'El salón no abre ese día.',too_long:'Ese servicio no entra antes del cierre.',lead_time:'No quedan horarios con la anticipación mínima.',date_limit:'La fecha supera el límite de reservas del salón.',busy:'No hay horarios libres para ese día.'};
+      emptyMessage=messages[statusResult.data]||emptyMessage;
+    }
+    if (requestId !== slotsRequest || date !== $('#booking-date').value || servicesKey !== selectedServiceIds().join(',')) return;
+    select.innerHTML = availableSlots.length ? `<option value="">Elegí un horario</option>${availableSlots.map(time=>`<option value="${e(time)}">${e(time)}</option>`).join('')}` : `<option value="">${e(emptyMessage)}</option>`;
     if (availableSlots.includes(previousTime)) select.value = previousTime;
     select.disabled = false;
-    if (!availableSlots.length && !silent) toast('No hay horarios libres para ese día. Elegí otra fecha.', 'info');
+    if (!availableSlots.length && !silent) toast(emptyMessage, 'info');
   } catch (error) {
     if (requestId !== slotsRequest) return;
     select.innerHTML = '<option value="">No se pudieron cargar horarios</option>';
@@ -193,7 +222,7 @@ async function submit(ev) {
     $('#booking-intro').classList.add('hidden');
     $('#booking-success').classList.remove('hidden');
   } catch (error) {
-    $('#booking-error').textContent = requestError(error);
+    $('#booking-error').textContent = bookingErrorMessage(error);
     await loadSlots();
   } finally {
     setBusy(b, false);
