@@ -1258,6 +1258,31 @@ font-size:1.45rem}
   color: var(--text);
   line-height: 1.5;
 }
+.admin-backup-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  align-items: center;
+  gap: 1.25rem;
+  padding: var(--card-padding);
+  border-radius: var(--radius-asymmetric-card);
+  background: var(--color-ash);
+}
+.admin-backup-copy { min-width: 0; }
+.admin-backup-copy h2 { margin: 0 0 .55rem; }
+.admin-backup-copy > p.muted { max-width: 64ch; margin: 0; line-height: 1.55; }
+.admin-backup-actions { display: grid; gap: .55rem; justify-items: stretch; min-width: 0; }
+.admin-backup-actions .button { min-height: 48px; width: 100%; }
+.admin-backup-actions > p { margin: 0; font-size: .8rem; line-height: 1.45; }
+.admin-backup-warning {
+  margin: .85rem 0 0;
+  padding: .7rem .85rem;
+  border: 1px solid var(--warning-border);
+  border-radius: 12px;
+  background: var(--warning-surface);
+  color: var(--text);
+  line-height: 1.45;
+}
+#admin-backup-warning[hidden] { display: none; }
 @media (max-width: 900px) {
   .admin-price-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -1265,6 +1290,9 @@ font-size:1.45rem}
   .admin-pricing { padding: .9rem; }
   .admin-pricing-header { align-items: flex-start; flex-direction: column; }
   .admin-price-grid { grid-template-columns: 1fr; }
+  .admin-backup-card { grid-template-columns: minmax(0, 1fr); gap: 1rem; padding: 1rem; }
+  .admin-backup-actions { width: 100%; }
+  .admin-backup-actions > p { min-height: 0; }
 }
 
 
@@ -1591,6 +1619,7 @@ input, select, textarea, .toolbar input, .toolbar select, .field input, .field s
 .admin-pricing { padding: var(--card-padding); border: 0; border-radius: var(--radius-asymmetric-card); background: var(--color-ash); box-shadow: none; }
 .admin-plan-card { border: 0; border-radius: 20px; background: var(--color-canvas-white); }
 .admin-plan-pilot { border: 0; background: var(--color-ivory); }
+body.dark .admin-plan-pilot { background: var(--color-ash); color: var(--text); }
 .admin-plan-tag { border-radius: var(--radius-tags); background: var(--color-fog); color: var(--color-champagne); font-weight: 400; }
 .admin-plan-price { color: var(--color-rose); font-family: var(--font-polysans); font-size: 32px; font-weight: 400; }
 .login-card, .locked-card { border: 0; border-radius: var(--radius-asymmetric-card); box-shadow: none; background: var(--color-ash); }

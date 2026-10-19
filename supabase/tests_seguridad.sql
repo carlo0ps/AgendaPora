@@ -1,10 +1,15 @@
--- Comprobaciones de permisos/RLS relacionadas con migracion_17.sql.
+-- Comprobaciones de permisos/RLS relacionadas con migraciones 17 y 18.
 -- Ejecutar en Supabase SQL Editor como postgres. No cambia datos persistentes.
 begin;
 create temporary table reserva_security_results(caso text not null,resultado text not null,detalle text not null) on commit drop;
 
 do $$
-declare v_ok boolean; v_public_tables text;
+declare
+  v_ok boolean;
+  v_public_tables text;
+  v_regular_user uuid:=gen_random_uuid();
+  v_regular_slug text;
+  v_regular_denied boolean:=false;
 begin
   select c.relrowsecurity into v_ok from pg_catalog.pg_class c
   where c.oid='public.horarios_especiales'::regclass;
@@ -41,6 +46,25 @@ begin
     and has_function_privilege('anon','public.public_request_booking(text,uuid,date,time,text,text,text)','EXECUTE')
     into v_ok;
   insert into pg_temp.reserva_security_results values('RPC públicas limitadas',case when v_ok then 'PASS' else 'FAIL' end,'Las RPC legacy delegan en las mismas reglas públicas.');
+
+  select not has_function_privilege('anon','public.admin_respaldo_pagina(text,integer,integer)','EXECUTE')
+    and has_function_privilege('authenticated','public.admin_respaldo_pagina(text,integer,integer)','EXECUTE')
+    into v_ok;
+  insert into pg_temp.reserva_security_results values('Respaldo no ejecutable por anon',case when v_ok then 'PASS' else 'FAIL' end,'Solo authenticated recibe EXECUTE; el rol anon queda excluido.');
+
+  v_regular_slug:='respaldo-prueba-'||left(v_regular_user::text,8);
+  insert into auth.users(id,aud,role,email,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
+    values(v_regular_user,'authenticated','authenticated',v_regular_slug||'@example.invalid',now(),'{}'::jsonb,'{}'::jsonb,now(),now());
+  update public.perfiles set es_admin=false where user_id=v_regular_user;
+  perform set_config('request.jwt.claim.sub',v_regular_user::text,true);
+  begin
+    perform public.admin_respaldo_pagina('perfiles',0,1);
+    v_regular_denied:=false;
+  exception when others then
+    v_regular_denied:=sqlstate='42501';
+  end;
+  perform set_config('request.jwt.claim.sub','',true);
+  insert into pg_temp.reserva_security_results values('Usuaria común no exporta el respaldo',case when v_regular_denied then 'PASS' else 'FAIL' end,'La RPC verifica es_admin() dentro del servidor y rechaza una cuenta sin privilegios.');
 end $$;
 
 select caso,resultado,detalle from pg_temp.reserva_security_results order by caso;

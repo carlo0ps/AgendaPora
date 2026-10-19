@@ -24,6 +24,13 @@ let supabase;
 let salons = [];
 const SALON_PAGE_SIZE = 25;
 let salonPage = 0;
+const BACKUP_PAGE_SIZE = 250;
+const BACKUP_REMINDER_KEY = 'agendapora-admin-last-backup';
+const BACKUP_TABLES = [
+  'perfiles', 'clientas', 'servicios', 'turnos', 'turno_servicios', 'pagos', 'plantillas',
+  'gastos', 'productos', 'empleadas', 'solicitudes_reserva', 'solicitudes_reserva_servicios',
+  'pagos_suscripcion', 'horarios_especiales', 'fotos_clienta'
+];
 
 function credentialsReady() {
   if (SUPABASE_URL === 'SUPABASE_URL' || SUPABASE_ANON_KEY === 'SUPABASE_ANON_KEY') throw new Error('Configurá Supabase en js/config.js antes de usar el panel.');
@@ -81,6 +88,105 @@ async function refresh() {
   salons = listing.data || [];
   salonPage = Math.min(salonPage, Math.max(0, Math.ceil(salons.length / SALON_PAGE_SIZE) - 1));
   renderSalons();
+}
+
+function backupDatePY(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Asuncion', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function renderBackupReminder() {
+  const warning = $('#admin-backup-warning');
+  let lastBackup = null;
+  try {
+    const stored = localStorage.getItem(BACKUP_REMINDER_KEY);
+    if (stored) lastBackup = new Date(stored);
+  } catch {}
+  const validLast = lastBackup && Number.isFinite(lastBackup.getTime());
+  const elapsed = validLast ? Date.now() - lastBackup.getTime() : null;
+  const days = validLast ? Math.ceil(elapsed / 86400000) : null;
+  if (validLast && elapsed <= 7 * 86400000) {
+    warning.hidden = true;
+    warning.textContent = '';
+    return;
+  }
+  warning.hidden = false;
+  warning.textContent = validLast
+    ? `El último respaldo descargado en este navegador fue hace ${days} días. Descargá uno nuevo para mantener una copia reciente.`
+    : 'No hay un respaldo reciente registrado en este navegador. Descargá un respaldo completo para guardar una copia.';
+}
+
+async function fetchBackupTable(table, onProgress) {
+  const rows = [];
+  let offset = 0;
+  let total = null;
+  do {
+    const { data, error } = await supabase.rpc('admin_respaldo_pagina', {
+      p_tabla: table,
+      p_offset: offset,
+      p_limite: BACKUP_PAGE_SIZE
+    });
+    if (error) throw error;
+    if (!data || data.tabla !== table || !Array.isArray(data.filas)) {
+      throw new Error(`Respuesta inválida al leer ${table}.`);
+    }
+    const pageTotal = Number(data.total);
+    if (!Number.isSafeInteger(pageTotal) || pageTotal < 0) throw new Error(`Total inválido al leer ${table}.`);
+    total = total === null ? pageTotal : Math.max(total, pageTotal);
+    if (!data.filas.length && offset < total) throw new Error(`El respaldo de ${table} quedó incompleto.`);
+    rows.push(...data.filas);
+    offset += data.filas.length;
+    onProgress(table, offset, total);
+  } while (offset < total);
+  return rows;
+}
+
+async function downloadBackup(button) {
+  const status = $('#admin-backup-status');
+  setBusy(button, true, 'Preparando respaldo…');
+  status.textContent = 'Conectando con Supabase…';
+  try {
+    const tables = {};
+    const counts = {};
+    for (let index = 0; index < BACKUP_TABLES.length; index += 1) {
+      const table = BACKUP_TABLES[index];
+      status.textContent = `Leyendo ${table} (${index + 1} de ${BACKUP_TABLES.length})…`;
+      tables[table] = await fetchBackupTable(table, (name, loaded, total) => {
+        status.textContent = `Leyendo ${name}: ${loaded.toLocaleString('es-PY')} de ${total.toLocaleString('es-PY')} filas…`;
+      });
+      counts[table] = tables[table].length;
+    }
+    const date = backupDatePY();
+    const backup = {
+      formato: 'AgendaPorã respaldo completo',
+      version: 1,
+      fecha: date,
+      generado_en: new Date().toISOString(),
+      tablas: tables,
+      cantidades: counts
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `respaldo-${date}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    try { localStorage.setItem(BACKUP_REMINDER_KEY, new Date().toISOString()); } catch {}
+    renderBackupReminder();
+    status.textContent = `Respaldo descargado: ${Object.values(counts).reduce((sum, count) => sum + count, 0).toLocaleString('es-PY')} filas en ${BACKUP_TABLES.length} tablas.`;
+    toast(`Respaldo descargado: respaldo-${date}.json`);
+  } catch (error) {
+    status.textContent = 'No se pudo completar el respaldo. Revisá la conexión y volvé a intentar.';
+    toast(requestError(error), 'error');
+  } finally {
+    setBusy(button, false);
+  }
 }
 
 function editSalon(id) {
@@ -169,6 +275,7 @@ function showAdmin() {
   $('#admin-login').classList.add('hidden');
   $('#admin-content').classList.remove('hidden');
   $('#admin-logout').classList.remove('hidden');
+  renderBackupReminder();
   refresh().catch(error => toast(requestError(error), 'error'));
 }
 
@@ -202,6 +309,7 @@ function init() {
     }
   });
   $('#admin-refresh').addEventListener('click', () => refresh().then(() => toast('Datos actualizados')).catch(error => toast(requestError(error), 'error')));
+  $('#admin-backup-download').addEventListener('click', ev => downloadBackup(ev.currentTarget));
   $('#salons-list').addEventListener('click', ev => {
     const pageButton = ev.target.closest('[data-admin-page]');
     if (pageButton) {
