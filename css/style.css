@@ -1509,13 +1509,14 @@ th, td { border-bottom-color: var(--color-mist); }
 .button:hover { transform: none; }
 .button.primary { background: var(--primary-fill); color: var(--on-primary); }
 .button.primary:hover { background: var(--primary-hover); color: var(--on-primary-hover); }
-.button.soft { background: var(--color-mist); color: var(--text); }
-.button.soft:hover { background: var(--color-ash); }
+.button.soft { background: var(--primary-soft); color: var(--primary); border-color: var(--primary-soft); }
+.button.soft:hover { background: var(--primary-hover); color: var(--on-primary-hover); border-color: var(--primary-hover); }
 .button.ghost { border-color: var(--text); color: var(--text); }
 body.dark .button.ghost { border-color: var(--text-muted); color: var(--text); }
 .button.danger { color: var(--text); background: var(--color-fog); }
 .small-button { border-radius: 0; font-family: var(--font-polysans); font-size: 13px; font-weight: 400; letter-spacing: -.02em; }
-.small-button.primary { color: var(--text); background: var(--color-mist); }
+.small-button.primary { color: var(--on-primary); background: var(--primary-fill); border-color: var(--transparent); }
+.small-button.primary:hover { color: var(--on-primary-hover); background: var(--primary-hover); border-color: var(--primary-hover); }
 .icon-button { border-radius: 0; }
 .fab { border-radius: 0; background: var(--primary-fill); color: var(--on-primary); box-shadow: none; }
 .quick-action-menu .button { box-shadow: none; }
