@@ -43,6 +43,9 @@ declare
 begin
   v_hoy := (now() at time zone 'America/Asuncion')::date;
   v_lunes_proximo := v_hoy + (8 - extract(isodow from v_hoy)::integer);
+  if v_lunes_proximo <= v_hoy + 2 then
+    v_lunes_proximo := v_lunes_proximo + 7;
+  end if;
 
   if to_regclass('auth.users') is null then
     raise exception 'No se encuentra auth.users. Verificá que este script se ejecute en el proyecto Supabase correcto.';
@@ -254,28 +257,28 @@ begin
         (23,23,5,65,'Visita ficticia antigua para probar Reactivar.'::text)
       ) as d(seq,clienta_n,servicio_n,dias_atras,notas)
       union all
-      select 23+g.i,24,((g.i-1)%6)+1,v_hoy-(2+(g.i-1)*8),time '09:00',1,'hecho'::text,null::text
+      select 23+g.i,24,((g.i-1)%6)+1,v_hoy-(3*g.i+1),time '09:00',1,'hecho'::text,null::text
       from generate_series(1,7) as g(i)
       union all
-      select 30+g.i,25,((g.i-1)%6)+1,v_hoy-(1+(g.i-1)*8),time '09:00',1,'hecho'::text,null::text
+      select 30+g.i,25,((g.i-1)%6)+1,v_hoy-(3*g.i+2),time '09:00',1,'hecho'::text,null::text
       from generate_series(1,8) as g(i)
       union all select 39,1,1,v_hoy,time '08:00',1,'pendiente',null::text
-      union all select 40,2,2,v_hoy,time '10:00',1,'pendiente',null::text
-      union all select 41,3,3,v_hoy,time '08:30',2,'pendiente',null::text
-      union all select 42,4,4,v_hoy,time '13:30',2,'pendiente',null::text
-      union all select 43,5,6,v_hoy,time '14:00',1,'pendiente',null::text
-      union all select 44,6,2,v_hoy,time '09:15',1,'cancelado','Turno ficticio cancelado.'::text
-      union all select 45,6,5,v_hoy+1,time '09:00',1,'pendiente',null::text
-      union all select 46,7,3,v_hoy+1,time '09:00',2,'pendiente',null::text
-      union all select 47,8,2,v_hoy+1,time '12:00',1,'pendiente',null::text
-      union all select 48,9,4,v_hoy+1,time '14:00',2,'pendiente',null::text
+      union all select 40,2,2,v_hoy,time '09:00',1,'pendiente',null::text
+      union all select 41,3,1,v_hoy+1,time '13:15',2,'pendiente',null::text
+      union all select 42,4,4,v_hoy,time '12:00',2,'pendiente',null::text
+      union all select 43,5,6,v_hoy,time '13:15',1,'pendiente',null::text
+      union all select 44,6,2,v_hoy+2,time '13:00',1,'cancelado','Turno ficticio cancelado.'::text
+      union all select 45,6,5,v_hoy+1,time '08:00',1,'pendiente',null::text
+      union all select 46,7,3,v_hoy+1,time '09:15',2,'pendiente',null::text
+      union all select 47,8,2,v_hoy+2,time '09:00',1,'pendiente',null::text
+      union all select 48,9,4,v_hoy+1,time '14:15',2,'pendiente',null::text
       union all select 49,10,1,v_hoy+1,time '16:00',2,'cancelado','Turno ficticio cancelado.'::text
       union all select 50,10,1,v_lunes_proximo,time '09:00',1,'pendiente',null::text
-      union all select 51,11,2,v_lunes_proximo,time '09:00',2,'pendiente',null::text
+      union all select 51,11,2,v_lunes_proximo,time '10:00',2,'pendiente',null::text
       union all select 52,12,5,v_lunes_proximo+1,time '09:00',1,'pendiente',null::text
-      union all select 53,13,6,v_lunes_proximo+1,time '09:00',2,'pendiente',null::text
+      union all select 53,13,6,v_lunes_proximo+1,time '10:15',2,'pendiente',null::text
       union all select 54,14,4,v_lunes_proximo+2,time '09:00',1,'pendiente',null::text
-      union all select 55,15,3,v_lunes_proximo+2,time '09:00',2,'pendiente',null::text
+      union all select 55,15,3,v_lunes_proximo+2,time '10:15',2,'pendiente',null::text
       union all
       select 56,16,1,v_lunes_proximo+4,time '16:00',1,'no_vino','Ejemplo ficticio de inasistencia.'::text
       where v_no_vino_disponible
