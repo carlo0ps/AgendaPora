@@ -3,13 +3,14 @@
 -- v_reiniciar=true reemplaza los datos operativos de esa cuenta, nunca los de otras cuentas.
 begin;
 
-create temporary table seed_plantilla_resumen (
+create temporary table if not exists seed_plantilla_resumen (
   cantidad_clientas integer not null,
   cantidad_turnos integer not null,
   cantidad_pagos integer not null,
   deuda_total_gs bigint not null,
   ingresos_mes_gs bigint not null
-) on commit drop;
+) on commit preserve rows;
+truncate table pg_temp.seed_plantilla_resumen;
 
 do $seed$
 declare
