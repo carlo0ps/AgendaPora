@@ -1416,6 +1416,15 @@ font-size:1.45rem}
 body.dark {
   --shadow-strong: none;
   color-scheme: dark;
+  --color-canvas-white: var(--surface);
+  --color-ash: #2d242a;
+  --color-fog: var(--surface);
+  --color-ivory: var(--primary-soft);
+  --color-steel: var(--text-muted);
+  --color-slate: var(--text-muted);
+  --color-mist: var(--border);
+  --color-rose: var(--primary);
+  --color-champagne: var(--warning);
 }
 body.dark .metric-card,
 body.dark .panel,
@@ -1429,8 +1438,10 @@ body.dark .login-card input,
 body.dark .locked-card input { background: var(--color-fog); }
 body.dark .nav-link.active,
 body.dark .nav-link:hover,
-body.dark .button.soft,
-body.dark .small-button.primary { background: var(--color-ivory); color: var(--text); }
+body.dark .button.soft { background: var(--color-ivory); color: var(--text); }
+body.dark .button.soft:hover { background: var(--primary-hover); color: var(--on-primary-hover); border-color: var(--primary-hover); }
+body.dark .small-button.primary { background: var(--primary-fill); color: var(--on-primary); border-color: var(--transparent); }
+body.dark .small-button.primary:hover { background: var(--primary-hover); color: var(--on-primary-hover); border-color: var(--primary-hover); }
 body.dark .button.primary,
 body.dark .fab { background: var(--primary-fill); color: var(--on-primary); }
 body.dark .button.primary:hover { background: var(--primary-hover); color: var(--on-primary-hover); }
@@ -1513,7 +1524,7 @@ th, td { border-bottom-color: var(--color-mist); }
 .button.soft:hover { background: var(--primary-hover); color: var(--on-primary-hover); border-color: var(--primary-hover); }
 .button.ghost { border-color: var(--text); color: var(--text); }
 body.dark .button.ghost { border-color: var(--text-muted); color: var(--text); }
-.button.danger { color: var(--text); background: var(--color-fog); }
+.button.danger { color: var(--danger); background: var(--danger-surface); border-color: var(--danger-border); }
 .small-button { border-radius: 0; font-family: var(--font-polysans); font-size: 13px; font-weight: 400; letter-spacing: -.02em; }
 .small-button.primary { color: var(--on-primary); background: var(--primary-fill); border-color: var(--transparent); }
 .small-button.primary:hover { color: var(--on-primary-hover); background: var(--primary-hover); border-color: var(--primary-hover); }
