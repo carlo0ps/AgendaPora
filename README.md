@@ -69,6 +69,14 @@ python -m http.server 8000
 
 Abrí `http://localhost:8000/`. Los módulos ES no deben abrirse como `file://`. Probá con el usuario de administración y luego con una cuenta peluquera separada.
 
+### Cuenta plantilla
+
+1. En **Supabase → Authentication → Users → Add user**, creá una cuenta ficticia para la demostración y activá **Auto Confirm**. El valor inicial de `v_email` está al comienzo de [`supabase/seed_plantilla.sql`](supabase/seed_plantilla.sql); el script no crea usuarios de Auth, no modifica `auth.users` ni guarda contraseñas.
+2. Abrí **SQL Editor → New query**, pegá el contenido completo de `supabase/seed_plantilla.sql` y ejecutalo en el proyecto que contiene esa cuenta.
+3. Revisá la tabla que devuelve al final: con el reinicio activo debe mostrar 25 clientas, 55 turnos y 39 pagos; la deuda de prueba suma Gs. 280.000. Los ingresos del mes cambian según la fecha de ejecución. El esquema actual no admite `no_vino`, así que el script lo informa con `RAISE NOTICE` y omite ese estado. También carga turnos cancelados. No carga fotos.
+4. Para usar otra cuenta, cambiá `v_email` al correo creado en Auth. Si usás varias cuentas plantilla, asigná también un `v_slug` distinto y libre; el valor inicial es `plantilla-1`.
+5. Para recargarla desde cero, dejá `v_reiniciar := true` y ejecutá el script otra vez. El reinicio elimina los datos operativos solo del usuario asociado a `v_email`, en orden de claves foráneas, y vuelve a generar los mismos datos ficticios. Con `v_reiniciar := false`, conserva los datos adicionales de esa cuenta y actualiza las filas de plantilla identificadas por el script.
+
 ### 8. Publicar en GitHub Pages
 
 Creá en GitHub un repositorio vacío (sin README, licencia ni `.gitignore` inicial) y, desde la carpeta del proyecto, reemplazá `USUARIO` y `REPOSITORIO` por sus nombres exactos:
