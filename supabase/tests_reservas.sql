@@ -1,4 +1,4 @@
--- Pruebas transaccionales de disponibilidad. Ejecutar como postgres después de migracion_16.sql.
+-- Pruebas transaccionales de disponibilidad. Ejecutar como postgres después de migracion_17.sql.
 -- Crea fixtures con identidad/email reservados y revierte todo al final; no guarda contraseñas.
 begin;
 create temporary table reserva_test_results(caso text not null,resultado text not null,detalle text not null) on commit drop;
@@ -149,11 +149,12 @@ begin
   end;
   insert into pg_temp.reserva_test_results values('Dos reservas concurrentes al mismo recurso',case when v_race_ok then 'PASS' else 'FAIL' end,'El bloqueo por salón/fecha deja una solicitud y rechaza la segunda.');
 
-  select not exists(
-    select 1 from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
-    where n.nspname='public' and c.relkind in ('r','p') and has_table_privilege('anon',c.oid,'SELECT')
-  ) into v_ok;
-  insert into pg_temp.reserva_test_results values('Anon no puede leer ninguna tabla',case when v_ok then 'PASS' else 'FAIL' end,'El rol anon no tiene SELECT directo sobre tablas del esquema public.');
+  select string_agg(c.relname,', ' order by c.relname) into v_message
+  from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
+  where n.nspname='public' and c.relkind in ('r','p') and has_table_privilege('anon',c.oid,'SELECT');
+  v_ok:=v_message is null;
+  insert into pg_temp.reserva_test_results values('Anon no puede leer ninguna tabla',case when v_ok then 'PASS' else 'FAIL' end,
+    coalesce('Tablas que anon puede leer: '||v_message,'El rol anon no tiene SELECT directo sobre tablas del esquema public.'));
 end $$;
 
 select caso,resultado,detalle from pg_temp.reserva_test_results order by caso;

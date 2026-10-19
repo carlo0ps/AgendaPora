@@ -1,4 +1,4 @@
--- Comprobaciones de permisos/RLS relacionadas con migracion_16.sql.
+-- Comprobaciones de permisos/RLS relacionadas con migracion_17.sql.
 -- Ejecutar en Supabase SQL Editor como postgres. No cambia datos persistentes.
 begin;
 create temporary table reserva_security_results(caso text not null,resultado text not null,detalle text not null) on commit drop;

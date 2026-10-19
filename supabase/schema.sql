@@ -600,6 +600,9 @@ create policy pagos_suscripcion_admin_delete_rpc on public.pagos_suscripcion for
 -- Privilegios API explícitos; RLS sigue filtrando cada fila.
 grant usage on schema public to anon, authenticated;
 grant select,insert,update,delete on public.perfiles,public.clientas,public.servicios,public.turnos,public.pagos,public.plantillas,public.gastos,public.productos,public.empleadas,public.solicitudes_reserva,public.pagos_suscripcion,public.fotos_clienta to authenticated;
+-- La API pública usa RPCs SECURITY DEFINER; anon y PUBLIC no leen tablas directamente.
+revoke all privileges on all tables in schema public from anon, public;
+alter default privileges in schema public revoke all privileges on tables from anon, public;
 -- Las notas internas y los campos de administración se leen solo por las RPC seguras.
 revoke select on public.perfiles from authenticated;
 grant select(user_id,nombre,slug,telefono,direccion,logo_url,color_principal,horario_texto,horarios,vence_el,activo,visitas_premio,premio_descripcion,telefono_soporte,onboarding_estado,google_review_url) on public.perfiles to authenticated;
