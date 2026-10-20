@@ -120,3 +120,23 @@ La pantalla existente de **Cierre de caja** era un reporte diario, no una sesió
 - Los pagos y gastos con fecha de hoy se asocian a una caja abierta de hoy. Un pago o gasto en efectivo se rechaza si no existe una caja abierta de hoy; un registro histórico fechado antes no cambia el efectivo esperado.
 - Si queda una caja abierta después de medianoche, primero hay que cerrarla. La dueña puede continuar con un ajuste motivado en otra caja abierta; un cierre anterior nunca se edita.
 - La revisión de SQL fue estática. No hay credenciales de staging en este entorno para ejecutar migraciones o `tests_seguridad.sql` en Supabase; el paso de ejecución está en el checklist manual.
+
+## 14. Rediseño visual · 20/10/2026
+
+- Se definió la dirección **boutique de belleza moderna** y se centralizaron los tokens de color, tipografía, escala, espaciado, radios, elevaciones, tiempos de movimiento y capas en [css/style.css](css/style.css).
+- Bricolage Grotesque queda para títulos y valores destacados; Inter para texto y controles, con fuentes de respaldo. Modo claro y oscuro tienen superficies y colores de estado propios.
+- Contraste calculado con la fórmula WCAG para texto, texto secundario, CTA, etiquetas de estado y mensajes sobre fondos claros y oscuros: **todas las combinaciones evaluadas superan 4,5:1**. Mínimos en estas combinaciones: 5,67:1 en oscuro (texto claro sobre CTA) y 5,98:1 en claro (texto secundario sobre superficie suave).
+- [guia-ui.html](guia-ui.html) es una referencia local sin datos reales ni enlace desde el menú del salón.
+
+### Checklist visual para revisar a mano
+
+- [ ] Abrir [guia-ui.html](guia-ui.html) a 360 px y 1280 px, con el tema claro y oscuro; recorrer botones, campos, errores, estados, paginación y diálogo de muestra.
+- [ ] Revisar [index.html](index.html) a 360, 430 y 1280 px en ambos temas; confirmar navegación, búsqueda, tarjetas del inicio y calendario sin desbordamiento horizontal.
+- [ ] En login, recuperación y bloqueo, probar texto largo, teclado móvil, foco visible, links y botones de al menos 44 px.
+- [ ] En agenda, comprobar modo día y semana, línea de hora actual, estados, deudas y que el desplazamiento semanal quede dentro del calendario.
+- [ ] En clientas, revisar búsqueda, acciones rápidas, ficha e historial; comprobar que teléfono y WhatsApp abran enlaces correctos.
+- [ ] En caja y reportes, verificar cifras tabulares, filtros, gráficos, historial e impresión A4/80 mm.
+- [ ] En reservas públicas, comprobar selector de servicios, fecha, opciones de horario, resumen, mensajes de error y confirmación con un salón de pruebas.
+- [ ] Verificar admin en móvil y escritorio: métricas, respaldo, precios y listado paginado.
+- [ ] Con teclado, recorrer las páginas, usar /, Ctrl+K, ?, Escape en diálogos y revisar el indicador de foco.
+- [ ] Probar la preferencia de movimiento reducido del sistema y el cambio de tema; no usar capturas con datos reales.

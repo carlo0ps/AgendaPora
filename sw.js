@@ -1,6 +1,6 @@
-const CACHE_VERSION = 'agendapora-shell-v39';
+const CACHE_VERSION = 'agendapora-shell-v40';
 const SHELL = [
-  './', './index.html', './admin.html', './reservar.html', './404.html', './offline.html',
+  './', './index.html', './admin.html', './reservar.html', './404.html', './offline.html', './guia-ui.html',
   './css/style.css', './js/config.js', './js/utils.js',
   './js/app.js', './js/admin.js', './js/reservar.js', './icons/icon.svg'
 ];
@@ -24,7 +24,7 @@ self.addEventListener('activate', event => {
 function isAppShellRequest(request, url) {
   if (request.mode === 'navigate') return true;
   const path = url.pathname;
-  return /\/(index\.html|admin\.html|reservar\.html)$/.test(path)
+  return /\/(index\.html|admin\.html|reservar\.html|guia-ui\.html)$/.test(path)
     || /\/(js|css)\/[^/]+\.(js|css)$/.test(path);
 }
 

@@ -195,6 +195,13 @@ gitleaks version
 
 El hook revisa los archivos preparados antes de cada commit. Si querés desactivarlo, ejecutá `git config --unset core.hooksPath`. `.gitignore` excluye archivos `.env*`, CSV/XLSX locales, respaldos, logs y SQL fuera de `supabase/`; no uses `git add -f` para forzar datos privados.
 
+## Interfaz y guía visual
+
+La dirección visual del producto es **boutique de belleza moderna**: ciruela y rosa como acentos, superficies cálidas, radios generosos y tipografía Bricolage Grotesque para títulos junto a Inter para lectura y formularios. Los tokens completos de modo claro/oscuro, espaciado, radios, elevación, foco y movimiento están en [css/style.css](css/style.css). Los colores de estados mantienen texto legible sobre su superficie; los precios y horarios usan cifras tabulares.
+
+Abrí [guia-ui.html](guia-ui.html) en el navegador para revisar tipografía, paleta, botones, campos y errores, estados, tarjetas, tablas, gráficos, pestañas, paginación, diálogos y esqueletos. Es una página de referencia independiente: no está enlazada desde la navegación del salón ni contiene datos de clientas. La implementación mantiene HTML/CSS/JS sin build ni frameworks pesados.
+
+Decisiones visuales: se conserva el onboarding guiado existente; las pantallas usan nombres y datos de la cuenta cargada por la usuaria; las nuevas muestras de la guía usan únicamente nombres ficticios. No se agregan logros, confeti ni novedades en esta fase para mantener el alcance visual sin introducir estados o comportamiento de negocio nuevos.
 ## Archivos principales
 
 - [`index.html`](index.html): app móvil de la peluquera.
