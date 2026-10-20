@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es-PY">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#87344F">
+  <meta name="description" content="Referencia visual de componentes de AgendaPorã.">
+  <title>Guía UI · AgendaPorã</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=20261020-boutique2">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+</head>
+<body class="ui-guide-page">
+  <main class="ui-guide">
+    <header class="ui-guide-hero">
+      <a class="brand" href="index.html"><img src="icons/icon.svg" alt=""><span><strong>AgendaPorã</strong><small>Referencia de interfaz</small></span></a>
+      <p class="eyebrow">Sistema de diseño · 2026</p>
+      <h1>Boutique de belleza moderna</h1>
+      <p class="muted">Una interfaz cálida, rápida y clara para llevar el salón entre clientas. Esta página es una muestra local; no forma parte de la navegación del producto y no usa datos reales.</p>
+      <div class="ui-guide-tokens" aria-label="Paleta de marca">
+        <span class="ui-token"><i class="ui-swatch ui-swatch-plum"></i>Ciruela</span>
+        <span class="ui-token"><i class="ui-swatch ui-swatch-rose"></i>Rosa</span>
+        <span class="ui-token"><i class="ui-swatch ui-swatch-lilac"></i>Lila</span>
+        <span class="ui-token"><i class="ui-swatch ui-swatch-paper"></i>Papel</span>
+      </div>
+    </header>
+
+    <section class="ui-guide-section" aria-labelledby="type-title">
+      <p class="eyebrow">01 · Tipografía</p><h2 id="type-title">Carácter y lectura cómoda</h2>
+      <div class="ui-type-sample"><div><h3>Bricolage Grotesque</h3><p class="muted">Títulos, números destacados y navegación</p></div><strong class="ui-type-display">Aa Gs. 420.000</strong></div>
+      <div class="ui-type-sample"><div><h3>Inter</h3><p class="muted">Texto, formularios, etiquetas y mensajes</p></div><p>Una agenda clara deja lugar para lo que importa: recibir bien a cada clienta.</p></div>
+      <p class="ui-scale"><span>12 · Nota</span><span>14 · Etiqueta</span><span>16 · Texto</span><span>20 · Sección</span><span>28 · Título</span><span>40 · Portada</span></p>
+    </section>
+
+    <section class="ui-guide-section" aria-labelledby="controls-title">
+      <p class="eyebrow">02 · Controles</p><h2 id="controls-title">Acciones y formularios</h2>
+      <div class="ui-guide-grid">
+        <article class="ui-guide-card"><h3>Botones</h3><div class="ui-guide-actions"><button class="button primary">Guardar</button><button class="button ghost">Secundario</button><button class="button soft">Suave</button><button class="button danger">Peligro</button><button class="button whatsapp">WhatsApp</button><button class="button primary" disabled aria-disabled="true">Guardando…</button></div></article>
+        <article class="ui-guide-card"><h3>Campo y estados</h3><label class="field">Nombre de la clienta<input type="text" value="María Demo"></label><label class="field">Servicio<select><option>Manicura clásica</option></select></label><label class="field">Nota de ejemplo<input aria-invalid="true" value="Revisá este dato"><span class="form-error">Comprobá el valor antes de guardar.</span></label><label class="ui-switch"><input type="checkbox" checked><span class="ui-switch-track" aria-hidden="true"></span><span>Recordatorio activado</span></label></article>
+        <article class="ui-guide-card"><h3>Etiquetas</h3><div class="ui-guide-actions"><span class="status pendiente">Pendiente</span><span class="status hecho">Confirmado</span><span class="status cancelado">Cancelado</span><span class="ui-chip">Coloración</span><span class="ui-chip">90 min</span></div></article>
+        <article class="ui-guide-card"><h3>Accesibilidad</h3><p class="muted">Foco visible con teclado, mensajes asociados al campo y áreas táctiles de al menos 44 px.</p><button class="button ghost">Usá Tab para ver el foco</button></article>
+      </div>
+    </section>
+
+    <section class="ui-guide-section" aria-labelledby="surfaces-title">
+      <p class="eyebrow">03 · Superficies</p><h2 id="surfaces-title">Resumen, lista y progreso</h2>
+      <div class="ui-guide-grid">
+        <article class="metric-card"><span class="metric-label">Turnos de hoy</span><p class="metric-value">08</p><span class="metric-note">Dos más que el martes pasado</span></article>
+        <article class="ui-guide-card"><div class="panel-head"><h3>Próxima clienta</h3><span class="status pendiente">En 15 min</span></div><div class="list-row"><span class="avatar">L</span><span class="list-row-main"><strong>Lucía Demo</strong><small>Manicura · 10:30 · Gs. 120.000</small></span></div><div class="ui-guide-actions"><button class="button primary">Abrir turno</button><button class="button ghost">WhatsApp</button></div></article>
+        <article class="ui-guide-card"><h3>Primeros pasos</h3><p class="muted">Completá lo esencial para empezar con tu salón.</p><progress max="4" value="3" aria-label="3 de 4 pasos completados"></progress><p class="tiny">3 de 4 pasos completados</p></article>
+        <article class="ui-guide-card"><h3>Estado vacío</h3><div class="empty-state"><div class="empty-icon" aria-hidden="true">✦</div><strong>Un día para organizar</strong><span>Agregá un turno o compartí tu link de reservas.</span></div></article>
+      </div>
+    </section>
+
+    <section class="ui-guide-section" aria-labelledby="data-title">
+      <p class="eyebrow">04 · Datos</p><h2 id="data-title">Tabla, gráfico y paginación</h2>
+      <div class="ui-guide-card ui-guide-table-wrap"><table><thead><tr><th>Clienta</th><th>Visita</th><th>Saldo</th><th>Estado</th></tr></thead><tbody><tr><td>Lucía Demo</td><td>Hoy · 10:30</td><td>Gs. 0</td><td><span class="status hecho">Al día</span></td></tr><tr><td>Camila Demo</td><td>Hoy · 11:15</td><td>Gs. 80.000</td><td><span class="status pendiente">Pendiente</span></td></tr></tbody></table></div>
+      <div class="ui-guide-grid">
+        <article class="ui-guide-card"><h3>Ingresos del mes</h3><div class="ui-mini-chart" role="img" aria-label="Gráfico de ejemplo, ingresos en aumento"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="ui-guide-actions"><span class="muted tiny">Octubre</span><span class="status hecho">+12%</span></div></article>
+        <nav class="table-pagination ui-demo-pagination" aria-label="Paginación de ejemplo"><span>Mostrando 1–10 de 28</span><div><button class="button ghost" disabled>Anterior</button><span>Página 1 de 3</span><button class="button ghost">Siguiente</button></div></nav>
+      </div>
+    </section>
+
+    <section class="ui-guide-section" aria-labelledby="feedback-title">
+      <p class="eyebrow">05 · Retroalimentación</p><h2 id="feedback-title">Confirmaciones, ayuda y ventanas</h2>
+      <div class="ui-guide-grid">
+        <article class="ui-guide-card"><h3>Mensajes</h3><div class="ui-demo-toast">Listo, el turno quedó guardado.</div><p class="form-error">No se pudo cargar. Revisá tu conexión e intentá de nuevo.</p><button class="button soft" title="Se guarda en este dispositivo">Tema guardado acá ⓘ</button></article>
+        <article class="ui-guide-card"><h3>Pestañas</h3><div class="ui-demo-tabs" role="tablist" aria-label="Ficha de clienta"><button role="tab" aria-selected="true">Resumen</button><button role="tab" aria-selected="false">Turnos</button><button role="tab" aria-selected="false">Pagos</button></div><p class="muted">El contenido conserva foco y posición al cambiar de pestaña.</p></article>
+        <article class="ui-guide-card"><h3>Ventana y hoja móvil</h3><div class="ui-demo-modal"><div class="ui-demo-modal-head"><strong>Registrar un cobro</strong><span aria-hidden="true">×</span></div><p class="muted">Monto protagonista y opciones cómodas para tocar.</p><div class="ui-guide-actions"><button class="button primary">Confirmar</button><button class="button ghost">Cancelar</button></div></div></article>
+        <article class="ui-guide-card"><h3>Carga</h3><div class="ui-skeleton ui-skeleton-title"></div><div class="ui-skeleton"></div><div class="ui-skeleton ui-skeleton-short"></div><p class="muted tiny">Esqueleto con espacio reservado para evitar saltos de pantalla.</p></article>
+      </div>
+    </section>
+
+    <section class="ui-guide-section" aria-labelledby="themes-title">
+      <p class="eyebrow">06 · Temas</p><h2 id="themes-title">Claro y oscuro</h2>
+      <p>El modo claro usa superficies papel y tinta ciruela. El oscuro asigna fondos carbón cálidos y mantiene acentos suaves. Ambos temas usan tokens con contraste revisado y respetan el tema guardado en el dispositivo.</p>
+      <div class="ui-guide-theme-notes"><span><strong>Movimiento</strong> · 150–300 ms · reducido por preferencia del sistema</span><span><strong>Enfoque</strong> · contorno de 3 px visible</span><span><strong>Moneda y hora</strong> · números tabulares</span></div>
+    </section>
+
+    <footer class="ui-guide-footer"><a class="button ghost" href="index.html">Volver a AgendaPorã</a><span class="muted tiny">Muestra sin datos de clientas</span></footer>
+  </main>
+</body>
+</html>

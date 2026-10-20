@@ -2,19 +2,19 @@
 <html lang="es-PY">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#84324c"><meta name="description" content="Tu salón organizado: clientas, agenda, cobros y reservas en un solo lugar.">
+  <meta name="theme-color" content="#87344F"><meta name="description" content="Tu salón organizado: clientas, agenda, cobros y reservas en un solo lugar.">
   <title>AgendaPorã · Tu salón en orden</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400&display=swap" rel="stylesheet">
-  <link rel="icon" href="icons/icon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/style.css?v=20261019-beauty3">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/style.css?v=20261020-boutique3">
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
   <div id="toast-region" class="toast-region" aria-live="polite"></div>
   <section id="login-screen" class="login-screen">
-    <div class="login-card"><img class="brand-mark" src="icons/icon.svg" alt=""><p class="eyebrow">Tu salón, más organizado</p><h1>AgendaPorã</h1><p class="muted">Ingresá a tu espacio de trabajo.</p>
+    <div class="login-card"><svg class="login-ornament" viewBox="0 0 96 72" aria-hidden="true"><path d="M10 61C25 16 55 10 86 14" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="24" cy="50" r="7" fill="var(--primary-soft)"/><path d="m73 37 3 8 8 3-8 3-3 8-3-8-8-3 8-3z" fill="var(--warning)"/></svg><img class="brand-mark" src="icons/icon.svg" alt=""><p class="eyebrow">Tu salón, más organizado</p><h1>AgendaPorã</h1><p class="muted">Ingresá a tu espacio de trabajo.</p>
       <form id="login-form"><label for="login-email">Correo electrónico</label><input id="login-email" type="email" autocomplete="username" required>
-        <label for="login-password">Contraseña</label><input id="login-password" type="password" autocomplete="current-password" required minlength="8">
+        <label for="login-password">Contraseña</label><div class="password-input"><input id="login-password" type="password" autocomplete="current-password" required minlength="8"><button class="password-toggle" type="button" data-password-toggle="login-password" aria-controls="login-password" aria-pressed="false">Mostrar</button></div>
         <button class="button primary full" type="submit">Ingresar</button><p id="login-error" class="form-error" role="alert"></p>
       </form><p class="tiny muted">¿Necesitás ayuda? <a id="support-login" href="#">Escribinos por WhatsApp</a></p>
       <p class="tiny"><a id="forgot-password-link" href="#recuperar">Olvidé mi contraseña</a></p>
@@ -22,6 +22,7 @@
   </section>
   <section id="password-screen" class="login-screen hidden" aria-labelledby="password-screen-title">
     <div class="login-card">
+      <svg class="login-ornament" viewBox="0 0 96 72" aria-hidden="true"><path d="M10 61C25 16 55 10 86 14" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="24" cy="50" r="7" fill="var(--primary-soft)"/><path d="m73 37 3 8 8 3-8 3-3 8-3-8-8-3 8-3z" fill="var(--warning)"/></svg>
       <img class="brand-mark" src="icons/icon.svg" alt="">
       <p class="eyebrow">AgendaPorã</p><h1 id="password-screen-title">Recuperar contraseña</h1>
       <div id="password-request-panel">
@@ -35,8 +36,8 @@
       <div id="password-update-panel" class="hidden">
         <p class="muted">Elegí una contraseña nueva para tu cuenta.</p>
         <form id="password-recovery-form">
-          <label for="recovery-password">Nueva contraseña</label><input id="recovery-password" type="password" autocomplete="new-password" minlength="8" required>
-          <label for="recovery-password-confirm">Confirmar contraseña</label><input id="recovery-password-confirm" type="password" autocomplete="new-password" minlength="8" required>
+          <label for="recovery-password">Nueva contraseña</label><div class="password-input"><input id="recovery-password" type="password" autocomplete="new-password" minlength="8" required><button class="password-toggle" type="button" data-password-toggle="recovery-password" aria-controls="recovery-password" aria-pressed="false">Mostrar</button></div>
+          <label for="recovery-password-confirm">Confirmar contraseña</label><div class="password-input"><input id="recovery-password-confirm" type="password" autocomplete="new-password" minlength="8" required><button class="password-toggle" type="button" data-password-toggle="recovery-password-confirm" aria-controls="recovery-password-confirm" aria-pressed="false">Mostrar</button></div>
           <button class="button primary full" type="submit">Guardar contraseña</button>
           <p id="password-recovery-message" class="form-error" role="alert" aria-live="polite"></p>
         </form>
@@ -59,12 +60,12 @@
     </div>
   </section>
   <div id="app-shell" class="app-shell hidden">
-    <aside class="sidebar"><a class="brand" href="#inicio"><img id="brand-logo" src="icons/icon.svg" alt=""><span><strong id="brand-name">AgendaPorã</strong><small>Gestión para salones</small></span></a>
+    <aside class="sidebar"><div class="sidebar-brand-row"><a class="brand" href="#inicio"><img id="brand-logo" src="icons/icon.svg" alt=""><span><strong id="brand-name">AgendaPorã</strong><small>Gestión para salones</small></span></a><button id="sidebar-collapse" class="icon-button sidebar-collapse-button" type="button" aria-label="Colapsar menú lateral" aria-expanded="true" title="Colapsar menú lateral"><svg class="icon-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button></div>
       <nav id="side-nav" class="side-nav" aria-label="Principal"></nav>
-      <div class="sidebar-bottom"><a id="public-booking-link" class="button ghost full" target="_blank" rel="noopener">Ver reservas públicas</a><button id="theme-toggle" class="button ghost full">Cambiar tema</button><button id="logout-button" class="button ghost full">Salir</button><span class="tiny muted">America/Asuncion · Gs.</span></div>
+      <div class="sidebar-bottom"><a id="public-booking-link" class="button ghost full" target="_blank" rel="noopener" title="Ver reservas públicas"><svg class="icon-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M4 13h4l2 3h4l2-3h4"/></svg><span>Ver reservas públicas</span></a><button id="theme-toggle" class="button ghost full" type="button" aria-label="Cambiar tema" title="Cambiar tema"><svg class="icon-inline" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z"/></svg><span>Cambiar tema</span></button><button id="logout-button" class="button ghost full" type="button" aria-label="Cerrar sesión" title="Cerrar sesión"><svg class="icon-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9"/></svg><span>Salir</span></button><span class="tiny muted">America/Asuncion · Gs.</span></div>
     </aside>
-    <main class="main-area"><header class="topbar"><button id="mobile-menu" class="icon-button" type="button" aria-label="Abrir menú" aria-haspopup="dialog" aria-controls="mobile-menu-dialog" aria-expanded="false">☰</button><div><p class="eyebrow" id="page-kicker">Tu espacio</p><h1 id="page-title">Inicio</h1></div><button class="global-search-trigger" type="button" data-action="quick-search-open" aria-label="Buscar clientas, turnos y servicios"><span aria-hidden="true">⌕</span><span class="search-trigger-label">Buscar</span><kbd>/</kbd></button><button class="keyboard-help-button" type="button" data-action="keyboard-help" aria-label="Ayuda de atajos de teclado">?</button><div class="topbar-actions"><span id="subscription-badge" class="status-pill"></span><button id="logout-button-top" class="button ghost">Salir</button></div></header>
-      <div id="subscription-alert" class="notice hidden"></div><section id="view-root" class="view-root" aria-live="polite"></section>
+    <main class="main-area"><header class="topbar"><button id="mobile-menu" class="icon-button" type="button" aria-label="Abrir menú" aria-haspopup="dialog" aria-controls="mobile-menu-dialog" aria-expanded="false"><svg class="icon-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><div class="topbar-heading"><img id="topbar-brand-logo" class="topbar-logo" src="icons/icon.svg" alt=""><div><p class="eyebrow" id="page-kicker">Tu espacio</p><h1 id="page-title">Inicio</h1></div></div><button class="global-search-trigger" type="button" data-action="quick-search-open" aria-label="Buscar clientas, turnos y servicios"><span aria-hidden="true"><svg class="icon-inline" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.7"/><path d="m16 16 4.3 4.3"/></svg></span><span class="search-trigger-label">Buscar</span><kbd>/</kbd></button><button class="keyboard-help-button" type="button" data-action="keyboard-help" aria-label="Ayuda de atajos de teclado">?</button><div class="topbar-actions"><span id="subscription-badge" class="status-pill"></span><button id="logout-button-top" class="button ghost">Salir</button></div></header>
+      <div id="subscription-alert" class="notice hidden"></div><div id="offline-notice" class="notice offline-notice hidden" role="status" aria-live="polite">Estás sin conexión. Para consultar o guardar datos del salón, conectate a internet.</div><section id="view-root" class="view-root" aria-live="polite"></section>
     </main>
     <nav id="bottom-nav" class="bottom-nav" aria-label="Navegación móvil"></nav>
     <div id="quick-actions" class="quick-actions"><div class="quick-action-menu"><button type="button" class="button soft" data-action="fab-appointment">＋ Nuevo turno</button><button type="button" class="button soft" data-action="fab-client">♡ Nueva clienta</button><button type="button" class="button soft" data-action="fab-expense">− Registrar gasto</button></div><button type="button" class="fab" data-action="fab-toggle" aria-label="Accesos rápidos" aria-expanded="false">＋</button></div>
@@ -75,7 +76,7 @@
       <nav id="mobile-menu-nav" class="mobile-menu-nav" aria-label="Todas las secciones"></nav>
       <div class="mobile-menu-actions">
         <a id="mobile-public-booking-link" class="button ghost full" target="_blank" rel="noopener">Ver reservas públicas</a>
-        <button id="mobile-theme-toggle" class="button ghost full" type="button">Cambiar tema</button>
+        <label class="field theme-preference-field"><span>Modo de pantalla</span><select id="mobile-theme-toggle" data-theme-preference aria-label="Preferencia de tema"><option value="system">Seguir sistema</option><option value="light">Claro</option><option value="dark">Oscuro</option></select></label>
         <button id="mobile-logout-button" class="button ghost full" type="button">Cerrar sesión</button>
       </div>
     </div>

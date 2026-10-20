@@ -84,9 +84,10 @@ function ensureBookingServicePicker() {
   summary.id = 'booking-services-summary';
   summary.className = 'booking-services-summary';
   summary.setAttribute('aria-live', 'polite');
-  host.append(legend, picker, summary);
+  host.append(legend, picker);
   if (oldSelect) oldSelect.closest('.field')?.replaceWith(host);
   else $('#booking-form')?.prepend(host);
+  host.insertAdjacentElement('afterend', summary);
   if (!$('#booking-services')) throw new Error('No se encontró el formulario público de reservas. Actualizá la página e intentá de nuevo.');
   return $('#booking-services');
 }
@@ -98,6 +99,68 @@ function renderServiceSummary() {
   $('#booking-services-summary').textContent = selected.length
     ? `${selected.length} ${selected.length === 1 ? 'servicio' : 'servicios'} · ${money(price)} · ${duration} min en total`
     : 'Elegí al menos un servicio para ver los horarios disponibles.';
+}
+function ensureBookingTimeGrid() {
+  let grid = $('#booking-time-grid');
+  const select = $('#booking-time');
+  if (!select) throw new Error('No se encontró el selector de horarios.');
+  if (!grid) {
+    const field = document.createElement('fieldset');
+    field.className = 'field wide booking-time-field';
+    const legend = document.createElement('legend');
+    legend.textContent = 'Horario';
+    grid = document.createElement('div');
+    grid.id = 'booking-time-grid';
+    grid.className = 'booking-time-grid';
+    grid.setAttribute('role', 'radiogroup');
+    grid.setAttribute('aria-label', 'Horarios disponibles');
+    grid.setAttribute('aria-live', 'polite');
+    select.hidden = true;
+    select.setAttribute('aria-hidden', 'true');
+    select.tabIndex = -1;
+    select.required = false;
+    field.append(legend, select, grid);
+    select.closest('.field')?.replaceWith(field);
+  }
+  return grid;
+}
+function renderTimeGrid(message = '') {
+  const grid = $('#booking-time-grid');
+  const select = $('#booking-time');
+  if (!grid || !select) return;
+  grid.setAttribute('aria-busy', String(select.disabled));
+  if (availableSlots.length) {
+    grid.innerHTML = availableSlots.map((time, index) => {
+      const selected = select.value === time;
+      return '<button type="button" role="radio" class="booking-time-option' + (selected ? ' is-selected' : '') + '" aria-checked="' + String(selected) + '" tabindex="' + (selected || (!select.value && index === 0) ? '0' : '-1') + '" data-time="' + e(time) + '">' + e(time) + '</button>';
+    }).join('');
+    return;
+  }
+  grid.innerHTML = '<p class="booking-time-message" role="status">' + e(message || 'Elegí un servicio y un día para ver los horarios.') + '</p>';
+}
+function bindBookingTimeGrid(grid) {
+  grid.addEventListener('click', ev => {
+    const option = ev.target.closest('[data-time]');
+    if (!option || !availableSlots.includes(option.dataset.time)) return;
+    $('#booking-time').value = option.dataset.time;
+    renderTimeGrid();
+    [...grid.querySelectorAll('[data-time]')].find(button => button.dataset.time === option.dataset.time)?.focus();
+  });
+  grid.addEventListener('keydown', ev => {
+    const options = [...grid.querySelectorAll('[data-time]')];
+    const current = options.indexOf(ev.target.closest('[data-time]'));
+    if (current < 0 || !options.length) return;
+    let next = current;
+    if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') next = (current + 1) % options.length;
+    else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') next = (current - 1 + options.length) % options.length;
+    else if (ev.key === 'Home') next = 0;
+    else if (ev.key === 'End') next = options.length - 1;
+    else return;
+    ev.preventDefault();
+    $('#booking-time').value = options[next].dataset.time;
+    renderTimeGrid();
+    [...grid.querySelectorAll('[data-time]')].find(button => button.dataset.time === $('#booking-time').value)?.focus();
+  });
 }
 async function loadSalon() {
   const {
@@ -123,6 +186,7 @@ async function loadSalon() {
   $('#booking-date').min = today;
   $('#booking-date').max = shiftISODate(today,Number(salon.max_dias_reserva||60));
   $('#booking-date').value = today;
+  bindBookingTimeGrid(ensureBookingTimeGrid());
   $('#booking-form').classList.remove('hidden');
 }
 async function loadSlots(silent = false) {
@@ -139,9 +203,11 @@ async function loadSlots(silent = false) {
   availableSlots = [];
   select.disabled = true;
   select.innerHTML = '<option value="">Cargando horarios…</option>';
+  renderTimeGrid('Buscando horarios disponibles…');
   if (!date || !services.length) {
     select.innerHTML = '<option value="">Elegí servicio y día</option>';
     select.disabled = false;
+    renderTimeGrid('Elegí un servicio y un día para ver los horarios.');
     return;
   }
   try {
@@ -168,11 +234,13 @@ async function loadSlots(silent = false) {
     select.innerHTML = availableSlots.length ? `<option value="">Elegí un horario</option>${availableSlots.map(time=>`<option value="${e(time)}">${e(time)}</option>`).join('')}` : `<option value="">${e(emptyMessage)}</option>`;
     if (availableSlots.includes(previousTime)) select.value = previousTime;
     select.disabled = false;
+    renderTimeGrid(emptyMessage);
     if (!availableSlots.length && !silent) toast(emptyMessage, 'info');
   } catch (error) {
     if (requestId !== slotsRequest) return;
     select.innerHTML = '<option value="">No se pudieron cargar horarios</option>';
     select.disabled = true;
+    renderTimeGrid('No pudimos cargar los horarios. Revisá tu conexión e intentá de nuevo.');
     if (!silent) toast(requestError(error), 'error');
   }
 }
@@ -229,7 +297,7 @@ async function submit(ev) {
   }
 }
 async function init() {
-  applyTheme(localStorage.getItem('agendapora-theme') || 'light');
+  applyTheme(localStorage.getItem('agendapora-theme') || 'system');
   syncThemeFromStorage();
   try {
     if (!salonSlug || salonSlug.length > 80) throw new Error('Falta el enlace del salón. Pedile el link de reservas a tu peluquera.');

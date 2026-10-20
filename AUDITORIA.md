@@ -120,3 +120,64 @@ La pantalla existente de **Cierre de caja** era un reporte diario, no una sesió
 - Los pagos y gastos con fecha de hoy se asocian a una caja abierta de hoy. Un pago o gasto en efectivo se rechaza si no existe una caja abierta de hoy; un registro histórico fechado antes no cambia el efectivo esperado.
 - Si queda una caja abierta después de medianoche, primero hay que cerrarla. La dueña puede continuar con un ajuste motivado en otra caja abierta; un cierre anterior nunca se edita.
 - La revisión de SQL fue estática. No hay credenciales de staging en este entorno para ejecutar migraciones o `tests_seguridad.sql` en Supabase; el paso de ejecución está en el checklist manual.
+
+## 14. Rediseño visual · 20/10/2026
+
+- Se definió la dirección **boutique de belleza moderna** y se centralizaron los tokens de color, tipografía, escala, espaciado, radios, elevaciones, tiempos de movimiento y capas en [css/style.css](css/style.css).
+- Bricolage Grotesque queda para títulos y valores destacados; Inter para texto y controles, con fuentes de respaldo. Modo claro y oscuro tienen superficies y colores de estado propios.
+- Contraste calculado con la fórmula WCAG para texto, texto secundario, CTA, etiquetas de estado y mensajes sobre fondos claros y oscuros: **todas las combinaciones evaluadas superan 4,5:1**. Mínimos en estas combinaciones: 5,67:1 en oscuro (texto claro sobre CTA) y 5,98:1 en claro (texto secundario sobre superficie suave).
+- [guia-ui.html](guia-ui.html) es una referencia local sin datos reales ni enlace desde el menú del salón.
+
+### Checklist visual para revisar a mano
+
+- [ ] Abrir [guia-ui.html](guia-ui.html) a 360 px y 1280 px, con el tema claro y oscuro; recorrer botones, campos, errores, estados, paginación y diálogo de muestra.
+- [ ] Revisar [index.html](index.html) a 360, 430 y 1280 px en ambos temas; confirmar navegación, búsqueda, tarjetas del inicio y calendario sin desbordamiento horizontal.
+- [ ] En login, recuperación y bloqueo, probar texto largo, teclado móvil, foco visible, links y botones de al menos 44 px.
+- [ ] En agenda, comprobar modo día y semana, línea de hora actual, estados, deudas y que el desplazamiento semanal quede dentro del calendario.
+- [ ] En clientas, revisar búsqueda, acciones rápidas, ficha e historial; comprobar que teléfono y WhatsApp abran enlaces correctos.
+- [ ] En caja y reportes, verificar cifras tabulares, filtros, gráficos, historial e impresión A4/80 mm.
+- [ ] En reservas públicas, comprobar selector de servicios, fecha, opciones de horario, resumen, mensajes de error y confirmación con un salón de pruebas.
+- [ ] Verificar admin en móvil y escritorio: métricas, respaldo, precios y listado paginado.
+- [ ] Con teclado, recorrer las páginas, usar /, Ctrl+K, ?, Escape en diálogos y revisar el indicador de foco.
+- [ ] Probar la preferencia de movimiento reducido del sistema y el cambio de tema; no usar capturas con datos reales.
+
+- [ ] En la navegación móvil, verificar los cuatro destinos visibles (Inicio, Agenda, Clientas y Caja) y que Más abra todas las demás secciones; confirmar el estado activo y que la ventana cierra con Escape, toque afuera y selección.
+- [ ] En escritorio, colapsar y expandir la barra lateral; revisar que los iconos conserven nombre accesible, que la búsqueda global siga visible y que la preferencia sobreviva a una recarga.
+
+### Fase 3 · pantallas clave · 20/10/2026
+
+- Inicio: saludo en hora de Paraguay, fecha, turnos del día, ingresos, deuda, variación y accesos de agenda; el resumen compartible usa WhatsApp. Cumpleaños y reactivaciones abren acciones existentes.
+- Agenda: se conserva el movimiento de turnos y se agrega impresión solo para la vista diaria. La impresión oculta controles y prioriza el calendario.
+- Clientas: avatar de iniciales con tono estable, deuda y última visita en la lista. La ficha ofrece pestañas con navegación por flechas, Inicio y Fin; las acciones de pago, edición, turno y fotos conservan sus hooks.
+- Reserva: selector `#booking-time` y RPC siguen vigentes. La grilla táctil expone horarios como radios, con flechas, Inicio y Fin; el resumen de servicios queda pegado al borde inferior durante el formulario.
+- Cobro y reportes: cuatro medios de pago con iconos; el monto recibido queda destacado. Ingresos comparan el tramo actual con el mismo tramo anterior y el gráfico ofrece sus valores en una lista accesible.
+- Revisión estática: sintaxis JS, referencias, IDs, CSS y contraste calculado. No se inició sesión ni se consultaron datos reales. La vista previa local quedó omitida porque la herramienta de navegador no aceptó `file://`.
+- No se agrega deshacer para borrar: la eliminación de clientas también borra sus fotos privadas y las RPC existentes no ofrecen una restauración segura. No se agregan rachas/logros persistentes ni pantalla de novedades porque requieren estado y reglas de negocio nuevos.
+
+### Pruebas manuales recomendadas
+
+- [ ] En 360 px y 1280 px, abrir Inicio en claro/oscuro: revisar los cuatro indicadores, saludo, agenda, resumen por WhatsApp y tarjetas accionables.
+- [ ] En Agenda, abrir vista Día, imprimir y comprobar que los controles no salen en papel; alternar a Semana y comprobar el desplazamiento horizontal dentro del calendario.
+- [ ] En Clientas, abrir una ficha y recorrer las cinco pestañas con clic, Tab, flechas, Inicio y Fin; desde Pagos registrar un abono y desde Fotos subir una imagen de prueba.
+- [ ] En Reservas, elegir servicios y fecha; seleccionar horario con toque, teclado y flechas; enviar una solicitud de prueba y verificar que el resumen quede visible al desplazarse.
+- [ ] En Cobro rápido, comprobar el monto protagonista y los cuatro medios de pago; registrar un pago parcial de prueba y revisar el saldo restante.
+- [ ] En Reportes, comparar día, semana y mes; abrir “Consultar valores del gráfico” y confirmar que coincida con la línea.
+- [ ] Revisar Admin, bloqueo por vencimiento, estados vacíos, carga, tablas móviles, foco y áreas táctiles en ambos temas.
+
+### Fase 4 · detalles y retroalimentación · 20/10/2026
+
+- Tema: `system` sigue el cambio de preferencia del sistema; Claro y Oscuro se eligen desde el menú móvil, Configuración y el botón de escritorio. Se conserva el acento del salón y se calcula el color de texto sobre la marca.
+- Interacción: conteo de indicadores, transiciones de entrada, confirmación animada y confeti liviano al alcanzar un premio. `prefers-reduced-motion` reduce todas las animaciones; las transiciones se limitan a transformación y opacidad.
+- Acceso y estados: login y recuperación tienen un motivo SVG propio; Admin y las cuentas pueden mostrar/ocultar contraseña; los estados vacíos usan ilustraciones SVG del set interno; Caja usa esqueletos. El aviso offline aparece al perder conexión y el feedback de éxito vibra cuando el dispositivo lo permite. Cancelar un turno permite deshacer; el botón queda deshabilitado mientras la operación se guarda.
+- Sin deshacer para borrados irreversibles: clientas con fotos eliminan sus archivos privados y las operaciones existentes no exponen restauración. Anular pagos también depende de una RPC sin operación inversa segura.
+- Ideas descartadas: rachas/logros persistentes y pantalla de novedades requieren estado o reglas nuevas. No se suman tooltips contextuales redundantes a controles con etiqueta o ayuda de teclado; el gráfico muestra su lista de valores accesible en lugar de depender de tooltips de canvas. No se modificaron datos, lógica financiera, RPC, esquema ni RLS.
+- Auditoría estática final: `node --check` pasó en `js/app.js`, `js/reservar.js`, `js/utils.js` y `js/admin.js`; 6 páginas HTML revisadas, sin IDs duplicados ni referencias locales faltantes; CSS sin declaraciones de color literal fuera de tokens. Contraste calculado: 54 pares de texto/superficie, mínimo 5,67:1; 0 por debajo de 4,5:1. No hubo sesión ni datos reales. La vista previa local se omitió porque la herramienta de navegador rechazó `file://`.
+
+### Pruebas manuales recomendadas · fase 4
+
+- [ ] En móvil, cambiar tema a Sistema, Claro y Oscuro; cambiar también la preferencia del sistema y confirmar que Sistema responde. Repetir en Configuración y en Administración.
+- [ ] Mostrar/ocultar contraseñas en login, recuperación y Admin; recorrer con teclado y confirmar el nombre accesible del botón.
+- [ ] Cancelar un turno pendiente y tocar Deshacer antes de que venza el aviso; confirmar que vuelve a Pendiente. Repetir sin conexión y verificar que el error no oculta el estado.
+- [ ] Activar movimiento reducido y confirmar que desaparecen el conteo, las transiciones y el confeti, manteniendo disponibles los mensajes.
+- [ ] Desconectar y reconectar el dispositivo; confirmar el aviso offline y los mensajes de error al guardar. Revisar que los controles de cobro bloqueen dobles toques.
+- [ ] Verificar Caja con el esqueleto de carga, toast de éxito con vibración opcional y celebración al alcanzar el objetivo de fidelidad.

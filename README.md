@@ -60,7 +60,7 @@ El cambio de `es_admin`, `activo` y `vence_el` está protegido por trigger y por
 2. Abrí **Cierre de caja** e ingresá el efectivo inicial. El servidor registra fecha y hora de `America/Asuncion`; un índice único y un bloqueo transaccional impiden más de una caja abierta por salón.
 3. Cuando hay una caja abierta para hoy, los pagos y gastos con fecha de hoy se asocian a ella. Efectivo requiere esa caja y genera un movimiento automáticamente. Transferencia, Tigo Money y otros medios se desglosan en el cierre sin cambiar el efectivo físico. Los registros históricos con fecha anterior no se atribuyen a la caja actual.
 4. En la sesión podés registrar entradas y salidas manuales. Para corregir una diferencia usá la categoría **Ajuste** e ingresá un motivo. Los movimientos son inmutables; un cierre guarda el efectivo contado, esperado, la diferencia y un snapshot de pagos y gastos por medio.
-5. El historial permite filtrar por fechas y diferencias. Desde una sesión activa o un cierre guardado, **Imprimir A4 / 80 mm** abre el diálogo de impresión; elegí el tamaño de papel disponible en la impresora. **Enviar por WhatsApp** prepara el resumen.
+5. El historial permite filtrar por fechas y diferencias. Desde una sesión activa o un cierre guardado, **Imprimir A4 / 80 mm** imprime solo esa caja: oculta navegación, filtros e historial, evita dejar el título solo en una hoja y ajusta las columnas al papel. Elegí el tamaño disponible en la impresora. **Enviar por WhatsApp** prepara el resumen.
 6. Para cargar los datos ficticios de los seeds, aplicá migración 19 antes de ejecutar `seed_demo.sql` o `seed_plantilla.sql`. Cada seed crea una caja abierta de prueba con movimientos inventados y el reinicio borra solo la cuenta objetivo.
 
 ### Decisiones
@@ -195,6 +195,13 @@ gitleaks version
 
 El hook revisa los archivos preparados antes de cada commit. Si querés desactivarlo, ejecutá `git config --unset core.hooksPath`. `.gitignore` excluye archivos `.env*`, CSV/XLSX locales, respaldos, logs y SQL fuera de `supabase/`; no uses `git add -f` para forzar datos privados.
 
+## Interfaz y guía visual
+
+La dirección visual del producto es **boutique de belleza moderna**: ciruela y rosa como acentos, superficies cálidas, radios generosos y tipografía Bricolage Grotesque para títulos junto a Inter para lectura y formularios. Los tokens completos de modo claro/oscuro, espaciado, radios, elevación, foco y movimiento están en [css/style.css](css/style.css). Los colores de estados mantienen texto legible sobre su superficie; los precios y horarios usan cifras tabulares.
+
+Abrí [guia-ui.html](guia-ui.html) en el navegador para revisar tipografía, paleta, botones, campos y errores, estados, tarjetas, tablas, gráficos, pestañas, paginación, diálogos y esqueletos. Es una página de referencia independiente: no está enlazada desde la navegación del salón ni contiene datos de clientas. La implementación mantiene HTML/CSS/JS sin build ni frameworks pesados.
+
+Decisiones visuales: se conserva el onboarding guiado existente. El inicio comparte un resumen por WhatsApp y muestra accesos contextuales; la agenda del día se puede imprimir. La ficha agrupa Resumen, Turnos, Pagos, Notas y Fotos en pestañas accesibles, y las reservas ofrecen horarios en cuadrícula mientras el formulario mantiene su selector y RPC actuales. Login, recuperación y estados vacíos usan motivos SVG propios. El modo de pantalla puede seguir al sistema o fijarse en claro/oscuro; también hay mostrar/ocultar contraseña, aviso offline y movimiento reducido. Cancelar un turno ofrece Deshacer por unos segundos. No se agregan logros persistentes ni novedades porque requieren estado nuevo; no se puede recuperar un borrado de fotos con las operaciones actuales. Se conservaron las etiquetas de los controles y la ayuda de atajos; el gráfico brinda una lista de valores accesible en vez de depender de tooltips de canvas.
 ## Archivos principales
 
 - [`index.html`](index.html): app móvil de la peluquera.
