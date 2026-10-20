@@ -283,11 +283,22 @@ function showAdmin() {
 }
 
 function init() {
-  applyTheme(localStorage.getItem('agendapora-theme') || 'light');
+  applyTheme(localStorage.getItem('agendapora-theme') || 'system');
   syncThemeFromStorage();
   $('#salons-list').setAttribute('tabindex', '0');
   $('#salons-list').setAttribute('role', 'region');
   $('#salons-list').setAttribute('aria-label', 'Lista de salones desplazable');
+  document.addEventListener('click', ev => {
+    const button = ev.target.closest('[data-password-toggle]');
+    if (!button) return;
+    const input = document.getElementById(button.dataset.passwordToggle);
+    if (!input) return;
+    const visible = input.type === 'password';
+    input.type = visible ? 'text' : 'password';
+    button.textContent = visible ? 'Ocultar' : 'Mostrar';
+    button.setAttribute('aria-pressed', String(visible));
+    button.setAttribute('aria-label', (visible ? 'Ocultar' : 'Mostrar') + ' contraseña');
+  });
   $('#admin-login-form').addEventListener('submit', async ev => {
     ev.preventDefault();
     const b = ev.submitter;

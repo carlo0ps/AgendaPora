@@ -56,15 +56,29 @@ export const uuid = () => crypto.randomUUID();
 export function noStoreFetch(input, init = {}) {
   return fetch(input, { ...init, cache: 'no-store' });
 }
-export function applyTheme(theme) {
-  const dark = theme === 'dark';
+let systemThemeQuery;
+let systemThemeListenerRegistered = false;
+export function applyTheme(theme = 'system') {
+  const useSystem = theme === 'system';
+  if (useSystem && typeof window.matchMedia === 'function') {
+    systemThemeQuery ||= window.matchMedia('(prefers-color-scheme: dark)');
+    if (!systemThemeListenerRegistered) {
+      const syncSystemPreference = () => {
+        if (localStorage.getItem('agendapora-theme') === 'system') applyTheme('system');
+      };
+      if (systemThemeQuery.addEventListener) systemThemeQuery.addEventListener('change', syncSystemPreference);
+      else systemThemeQuery.addListener?.(syncSystemPreference);
+      systemThemeListenerRegistered = true;
+    }
+  }
+  const dark = useSystem ? systemThemeQuery?.matches === true : theme === 'dark';
   document.body.classList.toggle('dark', dark);
   const brandColor = getComputedStyle(document.body).getPropertyValue('--primary-fill').trim();
   applyBrandColor(brandColor);
 }
 export function syncThemeFromStorage() {
   window.addEventListener('storage', event => {
-    if (event.key === 'agendapora-theme') applyTheme(event.newValue || 'light');
+    if (event.key === 'agendapora-theme') applyTheme(event.newValue || 'system');
   });
 }
 export function applyBrandColor(value, root = document.body) {
@@ -85,14 +99,46 @@ export function applyBrandColor(value, root = document.body) {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = value;
 }
-export function toast(message, kind = 'success') {
+export function toast(message, kind = 'success', action = null) {
+  if (kind === 'success' && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') { try { navigator.vibrate(10); } catch {} }
   const region = $('#toast-region');
   if (!region) return;
   const node = document.createElement('div');
   node.className = `toast ${kind}`;
-  node.textContent = message;
+  const content = document.createElement('span');
+  content.className = 'toast-message';
+  content.textContent = message;
+  node.append(content);
+  let timeout;
+  if (action && typeof action.onAction === 'function') {
+    node.classList.add('has-action');
+    const button = document.createElement('button');
+    button.className = 'toast-action';
+    button.type = 'button';
+    button.textContent = action.label || 'Deshacer';
+    button.addEventListener('click', async () => {
+      if (button.disabled) return;
+      button.disabled = true;
+      button.textContent = 'Procesando…';
+      try {
+        await action.onAction();
+        clearTimeout(timeout);
+        node.remove();
+      } catch {
+        content.textContent = 'No se pudo deshacer. Intentá de nuevo.';
+        node.classList.remove('success');
+        node.classList.add('error');
+        button.disabled = false;
+        button.textContent = action.label || 'Reintentar';
+        button.focus();
+        clearTimeout(timeout);
+        timeout = setTimeout(() => node.remove(), 6000);
+      }
+    });
+    node.append(button);
+  }
   region.append(node);
-  setTimeout(() => node.remove(), 4200);
+  timeout = setTimeout(() => node.remove(), 4200);
 }
 export function setBusy(button, busy, label = 'Procesando…') {
   if (!button) return;

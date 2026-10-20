@@ -163,3 +163,21 @@ La pantalla existente de **Cierre de caja** era un reporte diario, no una sesió
 - [ ] En Cobro rápido, comprobar el monto protagonista y los cuatro medios de pago; registrar un pago parcial de prueba y revisar el saldo restante.
 - [ ] En Reportes, comparar día, semana y mes; abrir “Consultar valores del gráfico” y confirmar que coincida con la línea.
 - [ ] Revisar Admin, bloqueo por vencimiento, estados vacíos, carga, tablas móviles, foco y áreas táctiles en ambos temas.
+
+### Fase 4 · detalles y retroalimentación · 20/10/2026
+
+- Tema: `system` sigue el cambio de preferencia del sistema; Claro y Oscuro se eligen desde el menú móvil, Configuración y el botón de escritorio. Se conserva el acento del salón y se calcula el color de texto sobre la marca.
+- Interacción: conteo de indicadores, transiciones de entrada, confirmación animada y confeti liviano al alcanzar un premio. `prefers-reduced-motion` reduce todas las animaciones; las transiciones se limitan a transformación y opacidad.
+- Acceso y estados: login y recuperación tienen un motivo SVG propio; Admin y las cuentas pueden mostrar/ocultar contraseña; los estados vacíos usan ilustraciones SVG del set interno; Caja usa esqueletos. El aviso offline aparece al perder conexión y el feedback de éxito vibra cuando el dispositivo lo permite. Cancelar un turno permite deshacer; el botón queda deshabilitado mientras la operación se guarda.
+- Sin deshacer para borrados irreversibles: clientas con fotos eliminan sus archivos privados y las operaciones existentes no exponen restauración. Anular pagos también depende de una RPC sin operación inversa segura.
+- Ideas descartadas: rachas/logros persistentes y pantalla de novedades requieren estado o reglas nuevas. No se modificaron datos, lógica financiera, RPC, esquema ni RLS.
+- Auditoría estática final: `node --check` pasó en `js/app.js`, `js/reservar.js`, `js/utils.js` y `js/admin.js`; 6 páginas HTML revisadas, sin IDs duplicados ni referencias locales faltantes; CSS sin declaraciones de color literal fuera de tokens. Contraste calculado: 54 pares de texto/superficie, mínimo 5,67:1; 0 por debajo de 4,5:1. No hubo sesión ni datos reales. La vista previa local se omitió porque la herramienta de navegador rechazó `file://`.
+
+### Pruebas manuales recomendadas · fase 4
+
+- [ ] En móvil, cambiar tema a Sistema, Claro y Oscuro; cambiar también la preferencia del sistema y confirmar que Sistema responde. Repetir en Configuración y en Administración.
+- [ ] Mostrar/ocultar contraseñas en login, recuperación y Admin; recorrer con teclado y confirmar el nombre accesible del botón.
+- [ ] Cancelar un turno pendiente y tocar Deshacer antes de que venza el aviso; confirmar que vuelve a Pendiente. Repetir sin conexión y verificar que el error no oculta el estado.
+- [ ] Activar movimiento reducido y confirmar que desaparecen el conteo, las transiciones y el confeti, manteniendo disponibles los mensajes.
+- [ ] Desconectar y reconectar el dispositivo; confirmar el aviso offline y los mensajes de error al guardar. Revisar que los controles de cobro bloqueen dobles toques.
+- [ ] Verificar Caja con el esqueleto de carga, toast de éxito con vibración opcional y celebración al alcanzar el objetivo de fidelidad.

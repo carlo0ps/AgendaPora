@@ -57,6 +57,7 @@ const ICON_PATHS = {
   bank: '<path d="M3 9h18L12 4 3 9Z"/><path d="M5 10v8m4-8v8m6-8v8m4-8v8M3 21h18"/>',
   mobile: '<rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M10 5h4M10 18h4"/>',
   inbox: '<path d="M4 4h16v16H4z"/><path d="M4 13h4l2 3h4l2-3h4M8 8h8"/>',
+  gift: '<rect x="3" y="8" width="18" height="13" rx="2"/><path d="M2 8h20M12 8v13M12 8H7.5a2.5 2.5 0 1 1 2.5-2.5C10 7 12 8 12 8Zm0 0h4.5A2.5 2.5 0 1 0 14 5.5C14 7 12 8 12 8Z"/>',
   sparkle: '<path d="m12 3 2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2L12 3Z"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
   repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
@@ -256,11 +257,32 @@ function setBrand() {
   publicLink.href = bookingURL();
   publicLink.dataset.copy = bookingURL();
 }
-function setTheme(theme) {
-  applyTheme(theme);
-  localStorage.setItem('agendapora-theme', theme);
+function themeLabel(theme) {
+  return theme === 'system' ? 'Tema: sistema' : theme === 'dark' ? 'Tema: oscuro' : 'Tema: claro';
 }
-
+function setTheme(theme) {
+  const selected = ['system','light','dark'].includes(theme) ? theme : 'system';
+  applyTheme(selected);
+  localStorage.setItem('agendapora-theme', selected);
+  const label = themeLabel(selected);
+  $$('[data-theme-preference]').forEach(select => { select.value = selected; });
+  const sidebar = $('#theme-toggle');
+  if (sidebar) {
+    const text = sidebar.querySelector('span:last-child');
+    if (text) text.textContent = label;
+    sidebar.title = label;
+    sidebar.setAttribute('aria-label', 'Cambiar tema. Actual: ' + label);
+  }
+  $$('[data-action="toggle-theme"]').forEach(button => {
+    button.textContent = label;
+    button.setAttribute('aria-label', 'Cambiar tema. Actual: ' + label);
+  });
+}
+function cycleTheme() {
+  const options = ['system','light','dark'];
+  const current = localStorage.getItem('agendapora-theme') || 'system';
+  setTheme(options[(options.indexOf(current) + 1) % options.length]);
+}
 function setSubscription() {
   const days = daysUntil(state.profile?.vence_el) ?? -1;
   const badge = $('#subscription-badge'),
@@ -446,7 +468,7 @@ function appointments(date) {
 }
 
 
-function empty(title, body, icon = '♡') {
+function empty(title, body, icon = iconSVG('sparkle')) {
   return `<div class="empty-state"><div class="empty-icon" aria-hidden="true">${icon}</div><strong>${e(title)}</strong><span>${e(body)}</span></div>`;
 }
 
@@ -462,7 +484,7 @@ function table(headers, rows) {
   };
   const rowList = isPaginated ? Array.from(rows, labelRow) : [];
   const rowMarkup = isPaginated ? rowList.join('') : typeof rows === 'string' ? rows.split(/(?=<tr\b)/i).map(labelRow).join('') : '';
-  if (!rowMarkup) return empty('Todavía está vacío', 'Cuando agregues información, aparecerá acá.', '✦');
+  if (!rowMarkup) return empty('Todavía está vacío', 'Cuando agregues información, aparecerá acá.', iconSVG('sparkle'));
   const id = ++tableRenderIndex;
   if (isPaginated) tablePageData.set(id, { rows: rowList, page: 0 });
   const firstPage = isPaginated ? rowList.filter((_, index) => index < TABLE_PAGE_SIZE).join('') : rowMarkup;
@@ -547,6 +569,7 @@ function applyView() {
   tableRenderIndex = 0;
   $('#view-root').innerHTML = renderers[state.view]();
   bindView();
+  animateMetricValues();
   applyReadOnlyControls();
 }
 
@@ -576,6 +599,83 @@ function clientInitials(value) {
   return String(value || '?').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toLocaleUpperCase('es') || '?';
 }
 
+function animateMetricValues(root = $('#view-root')) {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  root.querySelectorAll('.metric-value').forEach(node => {
+    const text = node.textContent.trim();
+    const parts = text.match(/^(.*?)([0-9][0-9.]*)(.*?)$/u);
+    if (!parts) return;
+    const target = Number(parts[2].replaceAll('.', ''));
+    if (!Number.isSafeInteger(target) || target < 0 || target > 100000000) return;
+    const formatter = new Intl.NumberFormat('es-PY');
+    const started = performance.now();
+    const draw = now => {
+      const progress = Math.min(1, (now - started) / 260);
+      const current = Math.round(target * progress);
+      node.textContent = parts[1] + formatter.format(current) + parts[3];
+      if (progress < 1) requestAnimationFrame(draw);
+    };
+    node.textContent = parts[1] + formatter.format(0) + parts[3];
+    requestAnimationFrame(draw);
+  });
+}
+function celebrateLoyalty() {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const canvas = document.createElement('canvas');
+  canvas.className = 'loyalty-confetti';
+  canvas.setAttribute('aria-hidden', 'true');
+  const width = window.innerWidth, height = window.innerHeight, ratio = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = width * ratio;
+  canvas.height = height * ratio;
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
+  document.body.append(canvas);
+  const context = canvas.getContext('2d');
+  if (!context) { canvas.remove(); return; }
+  context.scale(ratio, ratio);
+  const styles = getComputedStyle(document.body);
+  const colors = ['--primary-fill','--lilac','--warning','--success'].map(name => styles.getPropertyValue(name).trim()).filter(Boolean);
+  const particles = Array.from({ length: 28 }, (_, index) => ({
+    x: width / 2 + (Math.random() - .5) * Math.min(width * .6, 420),
+    y: height * .22 + Math.random() * 24,
+    vx: (Math.random() - .5) * 5,
+    vy: -2 - Math.random() * 4,
+    size: 4 + Math.random() * 5,
+    angle: Math.random() * Math.PI,
+    spin: (Math.random() - .5) * .16,
+    color: colors[index % colors.length] || styles.getPropertyValue('--primary-fill').trim()
+  }));
+  const start = performance.now();
+  const draw = now => {
+    const elapsed = now - start;
+    context.clearRect(0, 0, width, height);
+    particles.forEach(particle => {
+      particle.x += particle.vx;
+      particle.y += particle.vy;
+      particle.vy += .13;
+      particle.angle += particle.spin;
+      context.save();
+      context.globalAlpha = Math.max(0, 1 - elapsed / 520);
+      context.translate(particle.x, particle.y);
+      context.rotate(particle.angle);
+      context.fillStyle = particle.color;
+      context.fillRect(-particle.size / 2, -particle.size / 2, particle.size, particle.size * 1.5);
+      context.restore();
+    });
+    if (elapsed < 520) requestAnimationFrame(draw);
+    else canvas.remove();
+  };
+  requestAnimationFrame(draw);
+}
+function celebrateClientReward(clientId, previousVisits) {
+  const client = clientById(clientId);
+  const current = Number(client?.visitas || 0);
+  const goal = Math.max(1, Number(state.profile?.visitas_premio || 10));
+  if (Math.floor(current / goal) > Math.floor(Number(previousVisits || 0) / goal) && current % goal === 0) {
+    celebrateLoyalty();
+    toast('¡Premio de fidelidad listo para entregar!');
+  }
+}
 function renderHome() {
   const today = dateInput(),
     startWeek = dateInput(beginningOfWeek()),
@@ -631,7 +731,7 @@ function renderHome() {
     '</div><div class="home-period-summary"><span>Esta semana <strong>' + money(weekIncome) + '</strong><small>' + e(trendLabel(weekIncome, previousWeekIncome)) + '</small></span><span>Este mes <strong>' + money(monthIncome) + '</strong><small>Pagos registrados en ' + e(month) + '</small></span></div>' +
     (pending.length ? '<a class="notice" href="#solicitudes"><strong>' + pending.length + ' solicitud' + (pending.length > 1 ? 'es' : '') + ' de reserva pendiente' + (pending.length > 1 ? 's' : '') + '.</strong> Revisar ahora →</a>' : '') +
     (thanksPending.length ? '<section class="panel"><div class="panel-head"><div><p class="eyebrow">Después de la visita</p><h2>Agradecimientos pendientes</h2><p class="muted tiny">Turnos hechos en los últimos tres días.</p></div></div><div class="list">' + thanksPending.map(a => { const client=clientById(a.clienta_id), phone=client?.telefono||a.telefono_publico; return '<div class="list-row thanks-pending-row"><div class="list-row-main"><strong>' + e(client?.nombre||a.nombre_publico||'Clienta') + '</strong><small>' + e(datePY(a.fecha)) + ' · ' + e(appointmentServiceLabel(a)) + '</small></div><div class="table-actions thanks-pending-actions">' + callLink(phone) + (phone ? '<button class="small-button primary" data-action="send-thanks" data-id="' + e(a.id) + '">WhatsApp</button>' : '') + '<button class="small-button" data-action="mark-thanks" data-id="' + e(a.id) + '">Marcar enviado</button></div></div>'; }).join('') + '</div></section>' : '') +
-    '<div class="content-grid home-content-grid"><section class="panel home-schedule-panel"><div class="panel-head"><div><p class="eyebrow">En orden</p><h2>Agenda de hoy</h2></div><a href="#agenda">Ver agenda →</a></div><div class="list appointment-timeline">' + (scheduleRows.join('') || empty('Un día para organizar', 'Todavía no tenés turnos para hoy. Agregá uno o compartí tu link de reservas.', '▦')) + '</div><div class="toolbar mt-1"><button class="button primary" data-action="new-appointment">＋ Nuevo turno</button><button class="button soft" data-action="share-booking">Compartir reservas</button></div></section><div class="home-side-panels"><section class="panel"><div class="panel-head"><div><p class="eyebrow">Fechas especiales</p><h2>Cumpleaños</h2></div><span class="home-panel-icon">' + iconSVG('gift') + '</span></div><div class="list">' + (birthdayRows.join('') || empty('Esta semana está tranquila', 'Los próximos cumpleaños van a aparecer acá.', iconSVG('gift'))) + '</div></section>' +
+    '<div class="content-grid home-content-grid"><section class="panel home-schedule-panel"><div class="panel-head"><div><p class="eyebrow">En orden</p><h2>Agenda de hoy</h2></div><a href="#agenda">Ver agenda →</a></div><div class="list appointment-timeline">' + (scheduleRows.join('') || empty('Un día para organizar', 'Todavía no tenés turnos para hoy. Agregá uno o compartí tu link de reservas.', iconSVG('calendar'))) + '</div><div class="toolbar mt-1"><button class="button primary" data-action="new-appointment">＋ Nuevo turno</button><button class="button soft" data-action="share-booking">Compartir reservas</button></div></section><div class="home-side-panels"><section class="panel"><div class="panel-head"><div><p class="eyebrow">Fechas especiales</p><h2>Cumpleaños</h2></div><span class="home-panel-icon">' + iconSVG('gift') + '</span></div><div class="list">' + (birthdayRows.join('') || empty('Esta semana está tranquila', 'Los próximos cumpleaños van a aparecer acá.', iconSVG('gift'))) + '</div></section>' +
     (reactivationRows.length ? '<section class="panel"><div class="panel-head"><div><p class="eyebrow">Hace 60 días o más</p><h2>Volvé a conectar</h2></div><a href="#clientas">Ver todas</a></div><div class="list">' + reactivationRows.join('') + '</div></section>' : '') +
     '</div></div><section class="panel"><div class="panel-head"><div><p class="eyebrow">Atajos</p><h2>Lo que necesitás, a mano</h2></div></div><div class="toolbar"><button class="button soft" data-action="new-client">＋ Agregar clienta</button><button class="button soft" data-action="share-catalog">Compartir catálogo</button><a class="button ghost" href="#recordatorios">Turnos de mañana</a><button class="button ghost" data-action="backup-json">Descargar respaldo</button></div></section></div>';
 }
@@ -861,7 +961,7 @@ function cashMetrics(box, totals, { closed = false } = {}) {
 
 function renderCashClose() {
   if (state.cashError) return `${heading('Cierre de caja', 'Efectivo del salón')}<section class="panel" role="alert"><p>${e(state.cashError)}</p><button class="button primary" data-action="refresh-cash">Reintentar</button></section>`;
-  if (!state.cashData) return `${heading('Cierre de caja', 'Efectivo del salón')}<section class="panel" role="status">${state.cashLoading ? 'Cargando caja…' : 'Seleccioná Caja para cargar los datos.'}</section>`;
+  if (!state.cashData) return `${heading('Cierre de caja', 'Efectivo del salón')}<section class="panel cash-loading-skeleton" role="status" aria-busy="${state.cashLoading}">${state.cashLoading ? '<span class="sr-only">Cargando datos de caja</span><div class="skeleton skeleton-title" aria-hidden="true"></div><div class="skeleton skeleton-row" aria-hidden="true"></div><div class="skeleton skeleton-row short" aria-hidden="true"></div>' : '<p>Seleccioná Caja para cargar los datos.</p>'}</section>`;
 
   const active = state.cashData.caja_abierta;
   const detail = state.cashDetail;
@@ -1077,6 +1177,7 @@ function renderEmployees() {
 }
 
 function renderSettings() {
+  const themePreference = localStorage.getItem('agendapora-theme') || 'system';
   const p = state.profile,
     templates = TEMPLATES.map(([key, label, defaultText]) => ({
       key,
@@ -1113,6 +1214,7 @@ function renderSettings() {
       <section class="panel"><h2>Respaldo y datos</h2><p class="muted tiny">El respaldo contiene la información del salón que puede leer tu cuenta.</p><div class="toolbar"><button class="button soft" data-action="backup-json">Descargar JSON</button><button class="button ghost" data-action="backup-csv">Descargar CSV</button></div></section>
       <section class="panel"><h2>Mensajes de WhatsApp</h2><p class="muted tiny">Variables: {nombre}, {fecha}, {hora}, {deuda}, {salon}; agradecimiento usa también {servicio} y {resena}.</p>${templates.map(t=>`<label class="field">${e(t.label)}<textarea class="template-input" data-template="${e(t.key)}" rows="3">${e(t.row?.contenido||t.defaultText)}</textarea></label>`).join('')}<button class="button primary" data-action="save-templates">Guardar mensajes</button></section>
       <section class="panel"><h2>Cambiar contraseña</h2><p class="muted tiny">Usá una contraseña nueva de al menos ocho caracteres.</p><form id="logged-password-form" class="password-settings-form"><label class="field">Nueva contraseña<input name="password" type="password" autocomplete="new-password" minlength="8" required></label><label class="field">Confirmar contraseña<input name="password_confirm" type="password" autocomplete="new-password" minlength="8" required></label><button class="button primary password-save" type="submit">Guardar contraseña</button><p id="logged-password-message" class="password-settings-message form-error" role="status" aria-live="polite"></p></form></section>
+      <section class="panel"><h2>Modo de pantalla</h2><p class="muted">Se guarda en este dispositivo.</p><label class="field theme-preference-field"><span>Preferencia de tema</span><select data-theme-preference aria-label="Preferencia de tema"><option value="system" ${themePreference === 'system' ? 'selected' : ''}>Seguir sistema</option><option value="light" ${themePreference === 'light' ? 'selected' : ''}>Claro</option><option value="dark" ${themePreference === 'dark' ? 'selected' : ''}>Oscuro</option></select></label></section>
     </div></div>`;
 }
 
@@ -1771,7 +1873,7 @@ async function completeQuickPayment(button) {
   if(!Number.isInteger(amount)||amount<0||amount>price||(amount===0&&price>0)) return toast('Ingresá un monto mayor que cero y que no supere el precio del servicio.','error');
   const otherDetail=medio==='Otro'?form.elements.otro_detalle.value.trim():'';
   if(medio==='Otro'&&(!otherDetail||otherDetail.length>60)) return toast('Especificá cómo pagó (máximo 60 caracteres).','error');
-  const thanks=form.elements.agradecer.checked, client=clientById(item?.clienta_id), thanksPhone=client?.telefono||item?.telefono_publico;
+  const thanks=form.elements.agradecer.checked, client=clientById(item?.clienta_id), thanksPhone=client?.telefono||item?.telefono_publico, visitsBefore=Number(client?.visitas||0);
   if(thanks&&!thanksPhone) return toast('Esta clienta no tiene teléfono. Desmarcá el agradecimiento o completá su número.','error');
   setBusy(button,true,'Guardando…');
   const thanksWindow=thanks?window.open('about:blank','_blank'):null;
@@ -1780,7 +1882,7 @@ async function completeQuickPayment(button) {
     if(error) throw error;
     $('#modal').close();
     toast(amount<price?`Pago parcial de ${money(amount)} registrado; queda ${money(price-amount)} pendiente.`:'Cobro registrado; la deuda se actualizó.');
-    await refresh(); if(thanks&&thanksWindow) { thanksWindow.location.href=waLink(thanksPhone,thanksMessage(item)); }
+    await refresh(); celebrateClientReward(item.clienta_id,visitsBefore); if(thanks&&thanksWindow) { thanksWindow.location.href=waLink(thanksPhone,thanksMessage(item)); }
   } catch(error) { thanksWindow?.close(); toast(requestError(error),'error'); setBusy(button,false); }
 }
 
@@ -1871,7 +1973,24 @@ async function handleAction(ev) {
     if (action === 'done-appointment') return paymentForm(state.data.turnos.find(a => a.id === id));
     if (action === 'cash-medium') return b.dataset.cashMedium==='Otro' ? selectOtherPayment(b) : completeQuickPayment(b);
     if (action === 'cash-other-confirm') return completeQuickPayment(b);
-    if (action === 'cancel-appointment') return changeAppointment(id,{estado:'cancelado'}).then(()=>$('#modal').close());
+    if (action === 'cancel-appointment') {
+      const appointment = state.data.turnos.find(turn => turn.id === id);
+      if (!appointment || appointment.estado !== 'pendiente') return toast('Este turno ya no está pendiente.', 'error');
+      const previousStatus = appointment.estado;
+      return changeAppointment(id, { estado: 'cancelado' }, { showToast: false }).then(changed => {
+        if (!changed) return;
+        $('#modal').close();
+        toast('Turno cancelado', 'success', {
+          label: 'Deshacer',
+          onAction: async () => {
+            const current = state.data.turnos.find(turn => turn.id === id);
+            if (current?.estado !== 'cancelado') throw new Error('El turno ya cambió.');
+            const undone = await changeAppointment(id, { estado: previousStatus }, { successMessage: 'Cancelación deshecha' });
+            if (!undone) throw new Error('No se pudo deshacer.');
+          }
+        });
+      });
+    }
     if (action === 'delete-appointment') return deletePendingAppointment(id);
     if (action === 'delete-special-date') {
       if (!confirm('¿Querés eliminar este horario especial?')) return;
@@ -1960,7 +2079,7 @@ async function handleAction(ev) {
     if (action === 'export-clients') return exportClients();
     if (action === 'import-clients') return importClients();
     if (action === 'toggle-theme') {
-      setTheme(document.body.classList.contains('dark') ? 'light' : 'dark');
+      cycleTheme();
       return;
     }
     if (action === 'save-templates') return saveTemplates();
@@ -1986,14 +2105,18 @@ async function handleAction(ev) {
     toast(requestError(error), 'error');
   }
 }
-async function changeAppointment(id, payload) {
-  if (!requireEditable()) return;
+async function changeAppointment(id, payload, { showToast = true, successMessage = 'Turno actualizado' } = {}) {
+  if (!requireEditable()) return false;
+  const clientId = state.data.turnos.find(turn => turn.id === id)?.clienta_id;
+  const visitsBefore = Number(clientById(clientId)?.visitas || 0);
   const {
     error
   } = await supabase.from('turnos').update(payload).eq('id', id);
   if (error) throw error;
-  toast('Turno actualizado');
+  if (showToast) toast(successMessage);
   await refresh();
+  if (payload.estado === 'hecho') celebrateClientReward(clientId, visitsBefore);
+  return true;
 }
 async function resolveRequest(id, accept) {
   if (!requireEditable()) return;
@@ -2675,8 +2798,12 @@ async function requestPasswordReset(ev) {
 
 async function init() {
   syncThemeFromStorage();
-  setTheme(localStorage.getItem('agendapora-theme') || 'light');
+  setTheme(localStorage.getItem('agendapora-theme') || 'system');
   $('#support-login').href = waLink(SUPPORT_WHATSAPP, 'Hola, necesito ayuda con AgendaPorã.');
+  const updateOfflineNotice = () => $('#offline-notice')?.classList.toggle('hidden', navigator.onLine);
+  window.addEventListener('online', updateOfflineNotice);
+  window.addEventListener('offline', updateOfflineNotice);
+  updateOfflineNotice();
   $('#forgot-password-link').addEventListener('click', ev => { ev.preventDefault(); showPasswordRequest(); });
   $('#password-back-login').addEventListener('click', ev => {
     ev.preventDefault();
@@ -2709,6 +2836,24 @@ async function init() {
       setBusy(button, false);
     }
   });
+  document.addEventListener('click', ev => {
+    const button = ev.target.closest('[data-password-toggle]');
+    if (!button) return;
+    const input = document.getElementById(button.dataset.passwordToggle);
+    if (!input) return;
+    const visible = input.type === 'password';
+    input.type = visible ? 'text' : 'password';
+    button.textContent = visible ? 'Ocultar' : 'Mostrar';
+    button.setAttribute('aria-pressed', String(visible));
+    button.setAttribute('aria-label', (visible ? 'Ocultar' : 'Mostrar') + ' contraseña');
+  });
+  document.addEventListener('change', ev => {
+    const select = ev.target.closest('[data-theme-preference]');
+    if (select) {
+      setTheme(select.value);
+      if (select.id === 'mobile-theme-toggle') $('#mobile-menu-dialog').close();
+    }
+  });
   $('#logout-button').addEventListener('click', signOut);
   $('#logout-button-top').addEventListener('click', signOut);
   $('#mobile-logout-button').addEventListener('click', signOut);
@@ -2727,8 +2872,7 @@ async function init() {
     ev.preventDefault();
     skipOnboarding();
   });
-  $('#theme-toggle').addEventListener('click', () => setTheme(document.body.classList.contains('dark') ? 'light' : 'dark'));
-  $('#mobile-theme-toggle').addEventListener('click', () => setTheme(document.body.classList.contains('dark') ? 'light' : 'dark'));
+  $('#theme-toggle').addEventListener('click', () => cycleTheme());
 
   const sidebarCollapsed = localStorage.getItem('agendapora-sidebar-collapsed') === 'true';
   $('#app-shell').classList.toggle('sidebar-collapsed', sidebarCollapsed);
@@ -2754,7 +2898,7 @@ async function init() {
     if (ev.target.closest('[data-mobile-menu-open]')) openMobileMenu();
   });
   $('#mobile-menu-dialog').addEventListener('click', ev => {
-    if (ev.target === ev.currentTarget || ev.target.closest('[data-mobile-menu-close],[data-nav],#mobile-public-booking-link,#mobile-theme-toggle,#mobile-logout-button')) ev.currentTarget.close();
+    if (ev.target === ev.currentTarget || ev.target.closest('[data-mobile-menu-close],[data-nav],#mobile-public-booking-link,#mobile-logout-button')) ev.currentTarget.close();
   });
   $('#mobile-menu-dialog').addEventListener('close', () => { $('#mobile-menu').setAttribute('aria-expanded', 'false'); $('#bottom-nav [data-mobile-menu-open]')?.setAttribute('aria-expanded', 'false'); });
   window.addEventListener('hashchange', handleAppNavigation);
