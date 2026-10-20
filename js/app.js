@@ -2196,7 +2196,7 @@ function cashMovementForm(type) {
     <p class="wide muted">Este movimiento se asociará a la caja abierta y actualizará el efectivo esperado.</p>
     <input type="hidden" name="tipo" value="${direction}">
     ${formField('Concepto','concepto','','text',{required:true,maxlength:120})}
-    ${fieldSelect('Categoría','categoria', [['retiro','Retiro'],['adelanto','Adelanto'],['cambio','Cambio'],['otros','Otros'],['ajuste','Ajuste por corrección']], 'otros', true)}
+    ${selectField('Categoría','categoria', [['retiro','Retiro'],['adelanto','Adelanto'],['cambio','Cambio'],['otros','Otros'],['ajuste','Ajuste por corrección']], 'otros', true)}
     ${formField('Monto (Gs.)','monto_gs','','number',{required:true,min:1,step:1})}
     <label id="cash-movement-reason-wrap" class="field wide" hidden><span>Motivo del ajuste</span><textarea name="motivo" maxlength="500"></textarea></label>
   </form>`, 'Registrar movimiento');
