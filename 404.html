@@ -66,7 +66,7 @@
     if (window.__bookingRouteSlug) {
       const bookingModule = document.createElement('script');
       bookingModule.type = 'module';
-      bookingModule.src = new URL('js/reservar.js?v=20261018-route-fix', document.baseURI).href;
+      bookingModule.src = new URL('js/reservar.js?v=20261020-booking-grid-fix', document.baseURI).href;
       bookingModule.onerror = () => {
         const intro = document.getElementById('booking-intro');
         if (!intro) return;

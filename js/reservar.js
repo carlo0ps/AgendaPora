@@ -107,6 +107,7 @@ function ensureBookingTimeGrid() {
   if (!grid) {
     const field = document.createElement('fieldset');
     field.className = 'field wide booking-time-field';
+    const oldField = select.closest('.field');
     const legend = document.createElement('legend');
     legend.textContent = 'Horario';
     grid = document.createElement('div');
@@ -120,7 +121,8 @@ function ensureBookingTimeGrid() {
     select.tabIndex = -1;
     select.required = false;
     field.append(legend, select, grid);
-    select.closest('.field')?.replaceWith(field);
+    if (oldField) oldField.replaceWith(field);
+    else $('#booking-form')?.append(field);
   }
   return grid;
 }
