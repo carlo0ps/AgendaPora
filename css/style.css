@@ -1899,3 +1899,52 @@ input[type="checkbox"], input[type="radio"], progress { accent-color: var(--prim
   .ui-type-sample { align-items: flex-start; flex-direction: column; }
   .ui-guide-footer { align-items: flex-start; flex-direction: column; }
 }
+
+/* Navegación de escritorio y etiquetas móviles para tablas */
+.sidebar-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sidebar-brand-row .brand { min-width: 0; flex: 1; }
+.sidebar-collapse-button { flex: none; }
+.topbar-heading { min-width: 0; }
+.topbar-logo { display: none; }
+.nav-more { font: inherit; cursor: pointer; }
+.nav-more:hover { text-decoration: none; }
+.sidebar-bottom .button { gap: 10px; }
+.sidebar-bottom .button > span { min-width: 0; }
+@media (min-width: 721px) {
+  .app-shell.sidebar-collapsed .sidebar { width: 84px; padding-inline: 10px; }
+  .app-shell.sidebar-collapsed .main-area { margin-left: 84px; }
+  .app-shell.sidebar-collapsed .sidebar-brand-row { flex-direction: column; gap: 12px; }
+  .app-shell.sidebar-collapsed .sidebar .brand { justify-content: center; padding: 4px 0 8px; }
+  .app-shell.sidebar-collapsed .sidebar .brand > span,
+  .app-shell.sidebar-collapsed .side-nav .nav-link > span:not(.nav-icon),
+  .app-shell.sidebar-collapsed .sidebar-bottom .tiny { display: none; }
+  .app-shell.sidebar-collapsed .sidebar .brand img { width: 48px; height: 48px; }
+  .app-shell.sidebar-collapsed .side-nav .nav-link { justify-content: center; padding-inline: 8px; }
+  .app-shell.sidebar-collapsed .sidebar-bottom .button { justify-content: center; padding-inline: 8px; font-size: 0; }
+  .app-shell.sidebar-collapsed .sidebar-bottom .button .icon-inline { width: 20px; height: 20px; flex: none; }
+  .app-shell.sidebar-collapsed .sidebar-collapse-button svg { transform: rotate(180deg); }
+}
+@media (max-width: 720px) {
+  .sidebar-collapse-button { display: none; }
+  .topbar-heading { display: flex; align-items: center; gap: 8px; flex: 1; }
+  .topbar-logo { display: block; flex: none; width: 34px; height: 34px; border-radius: 12px; object-fit: cover; }
+  .topbar-heading > div { min-width: 0; }
+  .topbar-heading .eyebrow { display: block; max-width: 100%; margin: 0 0 2px; overflow: hidden; color: var(--text-muted); font: 600 10px/1.2 var(--font-body); letter-spacing: .02em; text-overflow: ellipsis; text-transform: none; white-space: nowrap; }
+  .topbar-heading h1 { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .global-search-trigger > span:first-child { font-size: initial; }
+  .global-search-trigger > span:first-child::after { content: none; }
+  .bottom-nav .nav-more { border: 0; background: transparent; color: var(--text-muted); }
+  .bottom-nav .nav-more.active { background: var(--primary-soft); color: var(--primary); }
+  .table-component .table-wrap { overflow: visible; border: 0; border-radius: 0; background: transparent; }
+  .table-component table, .table-component tbody { display: block; width: 100%; min-width: 0; }
+  .table-component thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+  .table-component tbody { display: grid; gap: 10px; }
+  .table-component tr { display: block; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--elevation-1); }
+  .table-component td { min-width: 0; min-height: 42px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: right; overflow-wrap: anywhere; }
+  .table-component td::before { content: attr(data-label); flex: 0 0 34%; color: var(--text-muted); font-size: 11px; font-weight: 650; text-align: left; }
+  .table-component td:last-child { border-bottom: 0; }
+  .table-component td:not([data-label]) { justify-content: flex-end; }
+  .table-component td[colspan] { display: block; text-align: left; }
+  .table-component td[colspan]::before { display: none; }
+  .table-component .table-actions { justify-content: flex-end; }
+}

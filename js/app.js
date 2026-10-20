@@ -35,20 +35,39 @@ import {
 } from './utils.js';
 
 const NAV = [
-  ['inicio', '⌂', 'Inicio'],
-  ['clientas', '♡', 'Clientas'],
-  ['agenda', '▦', 'Agenda'],
-  ['caja', '＄', 'Cierre de caja'],
-  ['solicitudes', '✉', 'Reservas'],
-  ['servicios', '✦', 'Servicios'],
-  ['recordatorios', '◷', 'Mañana'],
-  ['reactivar', '↗', 'Reactivar'],
-  ['reportes', '▥', 'Reportes'],
-  ['gastos', '−', 'Gastos'],
-  ['productos', '◇', 'Insumos'],
-  ['empleadas', '♙', 'Equipo'],
-  ['configuracion', '⚙', 'Mi salón']
+  ['inicio', 'home', 'Inicio'],
+  ['clientas', 'clients', 'Clientas'],
+  ['agenda', 'calendar', 'Agenda'],
+  ['caja', 'cash', 'Cierre de caja'],
+  ['solicitudes', 'inbox', 'Reservas'],
+  ['servicios', 'sparkle', 'Servicios'],
+  ['recordatorios', 'clock', 'Mañana'],
+  ['reactivar', 'repeat', 'Reactivar'],
+  ['reportes', 'chart', 'Reportes'],
+  ['gastos', 'receipt', 'Gastos'],
+  ['productos', 'box', 'Insumos'],
+  ['empleadas', 'team', 'Equipo'],
+  ['configuracion', 'settings', 'Mi salón']
 ];
+const ICON_PATHS = {
+  home: '<path d="m3 10 9-7 9 7"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-7h6v7"/>',
+  clients: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20v-1.5a5 5 0 0 1 5-5h3a5 5 0 0 1 5 5V20"/><path d="M16 4.8a3.5 3.5 0 0 1 0 6.4M18 13.5a4.5 4.5 0 0 1 3.5 4.4V20"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h3M8 17h6"/>',
+  cash: '<rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 9h18M7 15h4"/><circle cx="16.5" cy="14.5" r="2"/>',
+  inbox: '<path d="M4 4h16v16H4z"/><path d="M4 13h4l2 3h4l2-3h4M8 8h8"/>',
+  sparkle: '<path d="m12 3 2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2L12 3Z"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+  repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  receipt: '<path d="M5 3h14v18l-3-2-4 2-4-2-3 2z"/><path d="M8 8h8M8 12h8M8 16h4"/>',
+  box: '<path d="m12 3 9 5v8l-9 5-9-5V8z"/><path d="m3 8 9 5 9-5M12 13v8M7.5 5.5l9 5"/>',
+  team: '<circle cx="9" cy="8" r="3"/><path d="M3 20v-1a6 6 0 0 1 12 0v1M16 5a3 3 0 0 1 0 6M18 14a4 4 0 0 1 3 4v2"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.7 2.9-.2-.1a1.7 1.7 0 0 0-1.8.2l-.2.1h-3.4l-.1-.2a1.7 1.7 0 0 0-1.6-1l-.2.1-2.9-1.7.1-.2a1.7 1.7 0 0 0-.2-1.8L7.5 15v-3.4l.2-.1a1.7 1.7 0 0 0 1-1.6l-.1-.2 1.7-2.9.2.1a1.7 1.7 0 0 0 1.8-.2l.2-.1h3.4l.1.2a1.7 1.7 0 0 0 1.6 1l.2-.1 2.9 1.7-.1.2a1.7 1.7 0 0 0 .2 1.8l.1.2V15z"/>',
+  more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'
+};
+function iconSVG(name) {
+  return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + (ICON_PATHS[name] || ICON_PATHS.more) + '</svg>';
+}
 const TABLES = ['clientas', 'servicios', 'turnos', 'turno_servicios', 'pagos', 'plantillas', 'gastos', 'productos', 'empleadas', 'solicitudes_reserva', 'horarios_especiales', 'fotos_clienta', 'cajas', 'caja_movimientos'];
 const MUTATING_ACTIONS = new Set(['new-client','edit-client','new-service','edit-service','new-appointment','new-client-appointment','edit-appointment','done-appointment','pay-appointment','new-expense','new-product','edit-product','new-employee','edit-employee','delete-row','delete-appointment','accept-request','reject-request','import-clients','save-templates','cancel-appointment','undo-payment','mark-thanks','save-special-date','delete-special-date','cash-open','cash-close','cash-movement-form']);
 const TEMPLATES = [
@@ -204,12 +223,18 @@ function activeNav(view) {
 }
 
 function navMarkup(mobile = false) {
-  const quick = mobile ? [...NAV.filter(([id]) => ['inicio', 'clientas', 'agenda', 'solicitudes'].includes(id)), ['configuracion', '•••', 'Más']] : NAV;
-  const links = quick.map(([id, icon, label]) => {
-    const selected = id === 'configuracion' ? !['inicio', 'clientas', 'agenda', 'solicitudes'].includes(state.view) : state.view === id;
-    return `<a class="nav-link ${selected?'active':''}" href="#${id}" data-nav="${id}" ${selected?'aria-current="page"':''}><span class="nav-icon" aria-hidden="true">${icon}</span><span>${e(label)}</span></a>`;
-  }).join('');
-  return links;
+  const mobileCore = ['inicio', 'agenda', 'clientas', 'caja'];
+  const routes = mobile ? mobileCore.map(id => NAV.find(item => item[0] === id)).filter(Boolean) : NAV;
+  const links = routes.map(([id, icon, label]) => {
+    const selected = state.view === id;
+    const mobileLabel = mobile && id === 'caja' ? 'Caja' : label;
+    return '<a class="nav-link ' + (selected ? 'active' : '') + '" href="#' + id + '" data-nav="' + id + '" aria-label="' + e(label) + '" title="' + e(label) + '" ' + (selected ? 'aria-current="page"' : '') + '><span class="nav-icon">' + iconSVG(icon) + '</span><span>' + e(mobileLabel) + '</span></a>';
+  });
+  if (mobile) {
+    const moreActive = !mobileCore.includes(state.view);
+    links.push('<button class="nav-link nav-more ' + (moreActive ? 'active' : '') + '" type="button" data-mobile-menu-open aria-label="Más secciones" aria-haspopup="dialog" aria-controls="mobile-menu-dialog" aria-expanded="false" title="Más secciones"><span class="nav-icon">' + iconSVG('more') + '</span><span>Más</span></button>');
+  }
+  return links.join('');
 }
 
 function renderNav() {
@@ -218,17 +243,17 @@ function renderNav() {
   $('#mobile-menu-nav').innerHTML = navMarkup();
   $('#mobile-public-booking-link').href = bookingURL();
 }
-
 function setBrand() {
   $('#brand-name').textContent = salonName();
   $('#brand-logo').src = logoURL();
+  $('#topbar-brand-logo').src = logoURL();
   $('#brand-logo').onerror = () => $('#brand-logo').src = 'icons/icon.svg';
+  $('#topbar-brand-logo').onerror = () => $('#topbar-brand-logo').src = 'icons/icon.svg';
   applyBrandColor(validColor(state.profile?.color_principal) ? state.profile.color_principal : getComputedStyle(document.body).getPropertyValue('--primary-fill').trim());
   const publicLink = $('#public-booking-link');
   publicLink.href = bookingURL();
   publicLink.dataset.copy = bookingURL();
 }
-
 function setTheme(theme) {
   applyTheme(theme);
   localStorage.setItem('agendapora-theme', theme);
@@ -425,13 +450,21 @@ function empty(title, body, icon = '♡') {
 
 function table(headers, rows) {
   const isPaginated = Array.isArray(rows);
-  const rowList = isPaginated ? Array.from(rows) : [];
-  const rowMarkup = isPaginated ? rowList.join('') : typeof rows === 'string' ? rows : '';
+  const labelRow = row => {
+    let column = 0;
+    return row.replace(/<td(?=[\s>])([^>]*)>/gi, (cell, attributes) => {
+      const label = headers[column++] || '';
+      if (!label || /\bcolspan\s*=/.test(attributes)) return cell;
+      return '<td data-label="' + e(label) + '"' + attributes + '>';
+    });
+  };
+  const rowList = isPaginated ? Array.from(rows, labelRow) : [];
+  const rowMarkup = isPaginated ? rowList.join('') : typeof rows === 'string' ? rows.split(/(?=<tr\b)/i).map(labelRow).join('') : '';
   if (!rowMarkup) return empty('Todavía está vacío', 'Cuando agregues información, aparecerá acá.', '✦');
   const id = ++tableRenderIndex;
   if (isPaginated) tablePageData.set(id, { rows: rowList, page: 0 });
   const firstPage = isPaginated ? rowList.filter((_, index) => index < TABLE_PAGE_SIZE).join('') : rowMarkup;
-  return `<section class="table-component"><div class="table-wrap" tabindex="0" role="region" aria-label="Tabla desplazable"><table><thead><tr>${headers.map(h=>`<th>${e(h)}</th>`).join('')}</tr></thead><tbody id="table-page-body-${id}">${firstPage}</tbody></table></div>${isPaginated ? tablePagination(id,0,rows.length) : ''}</section>`;
+  return '<section class="table-component"><div class="table-wrap" tabindex="0" role="region" aria-label="Tabla desplazable"><table><thead><tr>' + headers.map(h => '<th>' + e(h) + '</th>').join('') + '</tr></thead><tbody id="table-page-body-' + id + '">' + firstPage + '</tbody></table></div>' + (isPaginated ? tablePagination(id, 0, rows.length) : '') + '</section>';
 }
 function tablePagination(id, page, total) {
   if (total <= TABLE_PAGE_SIZE) return '';
@@ -2558,16 +2591,33 @@ async function init() {
   });
   $('#theme-toggle').addEventListener('click', () => setTheme(document.body.classList.contains('dark') ? 'light' : 'dark'));
   $('#mobile-theme-toggle').addEventListener('click', () => setTheme(document.body.classList.contains('dark') ? 'light' : 'dark'));
-  $('#mobile-menu').addEventListener('click', () => {
-    if (!state.locked) {
+  const sidebarCollapsed = localStorage.getItem('agendapora-sidebar-collapsed') === 'true';
+  $('#app-shell').classList.toggle('sidebar-collapsed', sidebarCollapsed);
+  $('#sidebar-collapse').setAttribute('aria-expanded', String(!sidebarCollapsed));
+  $('#sidebar-collapse').setAttribute('aria-label', sidebarCollapsed ? 'Expandir menú lateral' : 'Colapsar menú lateral');
+  $('#sidebar-collapse').title = sidebarCollapsed ? 'Expandir menú lateral' : 'Colapsar menú lateral';
+  $('#sidebar-collapse').addEventListener('click', () => {
+    const collapsed = $('#app-shell').classList.toggle('sidebar-collapsed');
+    localStorage.setItem('agendapora-sidebar-collapsed', String(collapsed));
+    $('#sidebar-collapse').setAttribute('aria-expanded', String(!collapsed));
+    $('#sidebar-collapse').setAttribute('aria-label', collapsed ? 'Expandir menú lateral' : 'Colapsar menú lateral');
+    $('#sidebar-collapse').title = collapsed ? 'Expandir menú lateral' : 'Colapsar menú lateral';
+  });
+  const openMobileMenu = () => {
+    if (!state.locked && !$('#mobile-menu-dialog').open) {
       $('#mobile-menu').setAttribute('aria-expanded', 'true');
+      $('#bottom-nav [data-mobile-menu-open]')?.setAttribute('aria-expanded', 'true');
       $('#mobile-menu-dialog').showModal();
     }
+  };
+  $('#mobile-menu').addEventListener('click', openMobileMenu);
+  $('#bottom-nav').addEventListener('click', ev => {
+    if (ev.target.closest('[data-mobile-menu-open]')) openMobileMenu();
   });
   $('#mobile-menu-dialog').addEventListener('click', ev => {
     if (ev.target === ev.currentTarget || ev.target.closest('[data-mobile-menu-close],[data-nav],#mobile-public-booking-link,#mobile-theme-toggle,#mobile-logout-button')) ev.currentTarget.close();
   });
-  $('#mobile-menu-dialog').addEventListener('close', () => $('#mobile-menu').setAttribute('aria-expanded', 'false'));
+  $('#mobile-menu-dialog').addEventListener('close', () => { $('#mobile-menu').setAttribute('aria-expanded', 'false'); $('#bottom-nav [data-mobile-menu-open]')?.setAttribute('aria-expanded', 'false'); });
   window.addEventListener('hashchange', handleAppNavigation);
   window.addEventListener('popstate', handleAppNavigation);
   window.addEventListener('pageshow', () => {

@@ -140,3 +140,6 @@ La pantalla existente de **Cierre de caja** era un reporte diario, no una sesió
 - [ ] Verificar admin en móvil y escritorio: métricas, respaldo, precios y listado paginado.
 - [ ] Con teclado, recorrer las páginas, usar /, Ctrl+K, ?, Escape en diálogos y revisar el indicador de foco.
 - [ ] Probar la preferencia de movimiento reducido del sistema y el cambio de tema; no usar capturas con datos reales.
+
+- [ ] En la navegación móvil, verificar los cuatro destinos visibles (Inicio, Agenda, Clientas y Caja) y que Más abra todas las demás secciones; confirmar el estado activo y que la ventana cierra con Escape, toque afuera y selección.
+- [ ] En escritorio, colapsar y expandir la barra lateral; revisar que los iconos conserven nombre accesible, que la búsqueda global siga visible y que la preferencia sobreviva a una recarga.
