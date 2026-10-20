@@ -60,7 +60,7 @@ El cambio de `es_admin`, `activo` y `vence_el` está protegido por trigger y por
 2. Abrí **Cierre de caja** e ingresá el efectivo inicial. El servidor registra fecha y hora de `America/Asuncion`; un índice único y un bloqueo transaccional impiden más de una caja abierta por salón.
 3. Cuando hay una caja abierta para hoy, los pagos y gastos con fecha de hoy se asocian a ella. Efectivo requiere esa caja y genera un movimiento automáticamente. Transferencia, Tigo Money y otros medios se desglosan en el cierre sin cambiar el efectivo físico. Los registros históricos con fecha anterior no se atribuyen a la caja actual.
 4. En la sesión podés registrar entradas y salidas manuales. Para corregir una diferencia usá la categoría **Ajuste** e ingresá un motivo. Los movimientos son inmutables; un cierre guarda el efectivo contado, esperado, la diferencia y un snapshot de pagos y gastos por medio.
-5. El historial permite filtrar por fechas y diferencias. Desde una sesión activa o un cierre guardado, **Imprimir A4 / 80 mm** abre el diálogo de impresión; elegí el tamaño de papel disponible en la impresora. **Enviar por WhatsApp** prepara el resumen.
+5. El historial permite filtrar por fechas y diferencias. Desde una sesión activa o un cierre guardado, **Imprimir A4 / 80 mm** imprime solo esa caja: oculta navegación, filtros e historial, evita dejar el título solo en una hoja y ajusta las columnas al papel. Elegí el tamaño disponible en la impresora. **Enviar por WhatsApp** prepara el resumen.
 6. Para cargar los datos ficticios de los seeds, aplicá migración 19 antes de ejecutar `seed_demo.sql` o `seed_plantilla.sql`. Cada seed crea una caja abierta de prueba con movimientos inventados y el reinicio borra solo la cuenta objetivo.
 
 ### Decisiones

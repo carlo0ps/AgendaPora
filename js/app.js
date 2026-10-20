@@ -1001,14 +1001,14 @@ function renderCashClose() {
     <section class="cash-breakdown-panel"><h3>Movimientos de efectivo</h3><div class="cash-breakdown-list">${cashMovementRows(detail.movimientos)}</div></section>
   </section>` : '';
 
-  return `${heading('Cierre de caja', 'Sesiones, efectivo y diferencias')}
+  return `<div class="cash-page-view">${heading('Cierre de caja', 'Sesiones, efectivo y diferencias')}
     ${opening}
-    <div class="cash-print-area">${activeView}${detailView}</div>
+    <div class="cash-print-area${detailBox ? ' has-closed-detail' : ''}">${activeView}${detailView}</div>
     <section class="panel cash-history-panel">
       <div class="cash-history-heading"><div><p class="eyebrow">Archivo</p><h2>Historial de cajas</h2></div><p class="muted">Los cierres guardados no se modifican. Para corregir efectivo, registrá un ajuste con motivo en la caja abierta.</p></div>
       <div class="toolbar cash-history-filters"><label class="field"><span>Desde</span><input id="cash-from" type="date" value="${e(state.cashFrom)}"></label><label class="field"><span>Hasta</span><input id="cash-to" type="date" value="${e(state.cashTo)}"></label><label class="field"><span>Diferencia</span><select id="cash-difference-filter"><option value="todos" ${state.cashDifferenceFilter==='todos'?'selected':''}>Todas</option><option value="con_diferencia" ${state.cashDifferenceFilter==='con_diferencia'?'selected':''}>Con diferencia</option><option value="sobrante" ${state.cashDifferenceFilter==='sobrante'?'selected':''}>Sobrantes</option><option value="faltante" ${state.cashDifferenceFilter==='faltante'?'selected':''}>Faltantes</option><option value="sin_diferencia" ${state.cashDifferenceFilter==='sin_diferencia'?'selected':''}>Sin diferencia</option></select></label></div>
       ${table(['Fecha','Esperado','Contado','Diferencia',''],historyRows)}
-    </section>`;
+    </section></div>`;
 }
 
 async function loadCashClose(force = false) {
