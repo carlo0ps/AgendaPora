@@ -54,6 +54,8 @@ const ICON_PATHS = {
   clients: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20v-1.5a5 5 0 0 1 5-5h3a5 5 0 0 1 5 5V20"/><path d="M16 4.8a3.5 3.5 0 0 1 0 6.4M18 13.5a4.5 4.5 0 0 1 3.5 4.4V20"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h3M8 17h6"/>',
   cash: '<rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 9h18M7 15h4"/><circle cx="16.5" cy="14.5" r="2"/>',
+  bank: '<path d="M3 9h18L12 4 3 9Z"/><path d="M5 10v8m4-8v8m6-8v8m4-8v8M3 21h18"/>',
+  mobile: '<rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M10 5h4M10 18h4"/>',
   inbox: '<path d="M4 4h16v16H4z"/><path d="M4 13h4l2 3h4l2-3h4M8 8h8"/>',
   sparkle: '<path d="m12 3 2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2L12 3Z"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
@@ -548,31 +550,91 @@ function applyView() {
   applyReadOnlyControls();
 }
 
+function timeGreeting() {
+  const hour = Number(new Intl.DateTimeFormat('en', {
+    timeZone: 'America/Asuncion',
+    hour: '2-digit',
+    hourCycle: 'h23'
+  }).format(new Date()));
+  return hour < 12 ? 'Buen día' : hour < 19 ? 'Buenas tardes' : 'Buenas noches';
+}
+
+function trendLabel(current, previous) {
+  if (!previous) return current ? 'Empezando este período' : 'Sin movimientos anteriores';
+  const change = Math.round(((current - previous) / previous) * 100);
+  if (!change) return 'Igual que el mismo día de la semana pasada';
+  return (change > 0 ? '+' : '') + change + '% frente a la semana pasada';
+}
+
+function avatarTone(value) {
+  let hash = 0;
+  for (const char of String(value || '')) hash = ((hash << 5) - hash + char.codePointAt(0)) | 0;
+  return Math.abs(hash) % 6;
+}
+
+function clientInitials(value) {
+  return String(value || '?').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toLocaleUpperCase('es') || '?';
+}
+
 function renderHome() {
   const today = dateInput(),
     startWeek = dateInput(beginningOfWeek()),
-    month = today.slice(0, 7);
+    month = today.slice(0, 7),
+    lastWeekDay = shiftDate(today, -7),
+    previousWeekStart = shiftDate(startWeek, -7),
+    previousWeekEnd = shiftDate(startWeek, -1);
   const dayAppointments = appointments(today),
+    previousDayAppointments = appointments(lastWeekDay),
     sumWhere = predicate => state.data.pagos.filter(predicate).reduce((n, payment) => n + Number(payment.monto_gs || 0), 0),
     todayIncome = sumWhere(payment => payment.fecha === today),
+    previousDayIncome = sumWhere(payment => payment.fecha === lastWeekDay),
     weekIncome = sumWhere(payment => payment.fecha >= startWeek && payment.fecha <= today),
+    previousWeekIncome = sumWhere(payment => payment.fecha >= previousWeekStart && payment.fecha <= previousWeekEnd),
     monthIncome = sumWhere(payment => payment.fecha.startsWith(month));
   const debt = state.data.clientas.reduce((n, c) => n + Number(c.deuda_gs || 0), 0),
+    clientsWithDebt = state.data.clientas.filter(c => Number(c.deuda_gs) > 0).length,
     birthdays = state.data.clientas.filter(c => birthdayInWeek(c.fecha_nacimiento)),
     pending = state.data.solicitudes_reserva.filter(r => r.estado === 'pendiente');
-  const thanksPending=state.data.turnos.filter(a=>a.estado==='hecho'&&!a.agradecido_at&&a.fecha>=shiftDate(today,-3)&&a.fecha<=today).sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.hora.localeCompare(a.hora));
+  const thanksPending = state.data.turnos.filter(a => a.estado === 'hecho' && !a.agradecido_at && a.fecha >= shiftDate(today, -3) && a.fecha <= today).sort((a,b) => b.fecha.localeCompare(a.fecha) || b.hora.localeCompare(a.hora));
+  const formerClients = clientsSorted().map(c => ({ ...c, last: lastVisit(c.id) }))
+    .filter(c => c.last && c.last <= shiftDate(today, -60))
+    .sort((a,b) => a.last.localeCompare(b.last)).slice(0, 3);
+  const dateLabel = new Intl.DateTimeFormat('es-PY', {
+    timeZone: 'America/Asuncion',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+  }).format(new Date());
   const scheduleRows = dayAppointments.slice(0, 7).map(a => {
-    const c = clientById(a.clienta_id);
-    return `<div class="list-row dashboard-appointment-row"><div class="avatar">${e((c?.nombre||a.nombre_publico||'?').slice(0,1).toUpperCase())}</div><div class="list-row-main"><strong>${e(timePY(a.hora))} · ${e(c?.nombre||a.nombre_publico||'Clienta')}</strong><small>${e(appointmentServiceLabel(a))} · ${money(a.precio_gs)}</small></div><div class="dashboard-appointment-actions ${a.estado==='pendiente'?'has-pending':''}"><span class="dashboard-call">${callLink(c?.telefono||a.telefono_publico)}</span><span class="status ${e(a.estado)}">${e(a.estado)}</span>${a.estado==='pendiente'?`<button class="small-button primary" data-action="done-appointment" data-id="${e(a.id)}">Hecho / cobrar</button><button class="small-button danger" data-action="delete-appointment" data-id="${e(a.id)}">Eliminar</button>`:''}</div></div>`
+    const client = clientById(a.clienta_id),
+      name = client?.nombre || a.nombre_publico || 'Clienta',
+      phone = client?.telefono || a.telefono_publico;
+    return '<div class="list-row dashboard-appointment-row"><span class="avatar tone-' + avatarTone(name) + '">' + e(clientInitials(name)) + '</span><div class="list-row-main"><strong>' + e(timePY(a.hora)) + ' · ' + e(name) + '</strong><small>' + e(appointmentServiceLabel(a)) + ' · ' + money(a.precio_cierre_gs ?? a.precio_gs) + '</small></div><div class="dashboard-appointment-actions"><span class="dashboard-call">' + callLink(phone) + '</span><span class="status ' + e(a.estado) + '">' + e(a.estado) + '</span>' + (a.estado === 'pendiente' ? '<button class="small-button primary" data-action="done-appointment" data-id="' + e(a.id) + '">Hecho / cobrar</button><button class="small-button danger" data-action="delete-appointment" data-id="' + e(a.id) + '">Eliminar</button>' : '') + '</div></div>';
   });
-  const birthdayRows = birthdays.slice(0, 5).map(c => `<div class="list-row"><div class="avatar">🎂</div><div class="list-row-main"><strong>${e(c.nombre)}</strong><small>${e(datePY(c.fecha_nacimiento))}</small></div><a class="small-button primary" href="${waLink(c.telefono,templateMessage('cumple',c,{fecha:'',hora:''}))}" target="_blank" rel="noopener">Saludar</a></div>`);
-  return `<div class="page-stack">${onboardingChecklist()}<div class="metrics-grid">${metric('Turnos de hoy',dayAppointments.length,'En la agenda de hoy')}${metric('Ingresos hoy',money(todayIncome),'Pagos registrados hoy')}${metric('Ingresos semana / mes',`${money(weekIncome)} / ${money(monthIncome)}`,'Abonos cobrados · mes actual')}${metric('Deuda total',money(debt),`${state.data.clientas.filter(c=>Number(c.deuda_gs)>0).length} clientas con saldo`)}</div>
-    ${pending.length?`<a class="notice" href="#solicitudes"><strong>${pending.length} solicitud${pending.length>1?'es':''} de reserva pendiente${pending.length>1?'s':''}.</strong> Revisar ahora →</a>`:''}
-    ${thanksPending.length?`<section class="panel"><div class="panel-head"><div><h2>Agradecimientos pendientes</h2><p class="muted tiny">Turnos hechos en los últimos tres días.</p></div></div><div class="list">${thanksPending.map(a=>{const c=clientById(a.clienta_id),phone=c?.telefono||a.telefono_publico;return `<div class="list-row thanks-pending-row"><div class="list-row-main"><strong>${e(c?.nombre||a.nombre_publico||'Clienta')}</strong><small>${datePY(a.fecha)} · ${e(appointmentServiceLabel(a))}</small></div><div class="table-actions thanks-pending-actions">${callLink(phone)}${phone?`<button class="small-button primary" data-action="send-thanks" data-id="${e(a.id)}">WhatsApp</button>`:''}<button class="small-button" data-action="mark-thanks" data-id="${e(a.id)}">Marcar enviado</button></div></div>`}).join('')}</div></section>`:''}
-    <div class="content-grid"><section class="panel"><div class="panel-head"><h2>Agenda de hoy</h2><a href="#agenda">Ver agenda →</a></div><div class="list">${scheduleRows.join('')||empty('Un día para organizar','Todavía no tenés turnos para hoy. Agregá uno o compartí tu link de reservas.','▦')}</div><div class="toolbar mt-1"><button class="button primary" data-action="new-appointment">＋ Nuevo turno</button><button class="button soft" data-action="share-booking">Compartir reservas</button></div></section><section class="panel"><div class="panel-head"><h2>Cumpleaños de la semana</h2><span>🎂</span></div><div class="list">${birthdayRows.join('')||empty('Esta semana está tranquila','Los próximos cumpleaños van a aparecer acá.','🎂')}</div></section></div>
-    <section class="panel"><div class="panel-head"><div><h2>Accesos rápidos</h2><p class="muted tiny">Lo que necesitás, a mano.</p></div></div><div class="toolbar"><button class="button soft" data-action="new-client">＋ Agregar clienta</button><button class="button soft" data-action="share-catalog">Compartir catálogo</button><a class="button ghost" href="#recordatorios">Turnos de mañana</a><button class="button ghost" data-action="backup-json">Descargar respaldo</button></div></section></div>`;
+  const birthdayRows = birthdays.slice(0, 4).map(c => '<div class="list-row"><span class="avatar tone-' + avatarTone(c.nombre) + '">' + e(clientInitials(c.nombre)) + '</span><div class="list-row-main"><strong>' + e(c.nombre) + '</strong><small>' + e(datePY(c.fecha_nacimiento)) + '</small></div><a class="small-button primary" href="' + e(waLink(c.telefono, templateMessage('cumple',c,{fecha:'',hora:''}))) + '" target="_blank" rel="noopener">Saludar</a></div>');
+  const reactivationRows = formerClients.map(c => '<div class="list-row"><span class="avatar tone-' + avatarTone(c.nombre) + '">' + e(clientInitials(c.nombre)) + '</span><div class="list-row-main"><strong>' + e(c.nombre) + '</strong><small>Última visita · ' + e(datePY(c.last)) + '</small></div><a class="small-button primary" href="' + e(waLink(c.telefono,templateMessage('reactivacion',c))) + '" target="_blank" rel="noopener">Escribir</a></div>');
+  const monthLabel = new Intl.DateTimeFormat('es-PY', { timeZone: 'America/Asuncion', month: 'long' }).format(new Date());
+  const greeting = timeGreeting(),
+    welcome = state.data.clientas.length === 0 && dayAppointments.length === 0
+      ? 'Empezá por cargar tus servicios y horarios. Después, agendá a tu primera clienta.'
+      : dayAppointments.length
+        ? 'Hoy te esperan ' + dayAppointments.length + ' ' + (dayAppointments.length === 1 ? 'turno' : 'turnos') + '. Que sea una linda jornada.'
+        : 'Hoy la agenda está tranquila. Podés preparar tu próximo día con tiempo.';
+  const daySummary = greeting + ' · ' + salonName() + '\n' + dateLabel + '\nTurnos de hoy: ' + dayAppointments.length + '\nIngresos de hoy: ' + money(todayIncome) + '\nSaldos pendientes: ' + money(debt);
+  return '<div class="page-stack">' + onboardingChecklist() +
+    '<section class="home-hero" aria-labelledby="home-hero-title"><div class="home-hero-copy"><p class="eyebrow">' + e(greeting) + ' · ' + e(salonName()) + '</p><h2 id="home-hero-title">Tu salón, en ritmo.</h2><p>' + e(welcome) + '</p><div class="home-hero-actions"><button class="button primary" data-action="new-appointment">＋ Nuevo turno</button><a class="button soft" href="#caja">Abrir caja</a><button class="button ghost" data-action="share-booking">Compartir reservas</button><a class="button ghost" href="' + e(waLink('',daySummary)) + '" target="_blank" rel="noopener">Compartir resumen</a></div></div><aside class="home-date-card"><span>' + e(dateLabel.split(' ')[0]) + '</span><strong>' + e(today.slice(-2)) + '</strong><span>' + e(monthLabel) + '</span></aside></section>' +
+    '<div class="metrics-grid">' +
+      metric('Turnos de hoy', dayAppointments.length, trendLabel(dayAppointments.length, previousDayAppointments.length)) +
+      metric('Ingresos hoy', money(todayIncome), trendLabel(todayIncome, previousDayIncome)) +
+      metric('Saldos pendientes', money(debt), clientsWithDebt + ' clientas con saldo') +
+      metric('Reservas por revisar', pending.length, pending.length ? 'Respondé para confirmar el horario' : 'No tenés solicitudes pendientes') +
+    '</div><div class="home-period-summary"><span>Esta semana <strong>' + money(weekIncome) + '</strong><small>' + e(trendLabel(weekIncome, previousWeekIncome)) + '</small></span><span>Este mes <strong>' + money(monthIncome) + '</strong><small>Pagos registrados en ' + e(month) + '</small></span></div>' +
+    (pending.length ? '<a class="notice" href="#solicitudes"><strong>' + pending.length + ' solicitud' + (pending.length > 1 ? 'es' : '') + ' de reserva pendiente' + (pending.length > 1 ? 's' : '') + '.</strong> Revisar ahora →</a>' : '') +
+    (thanksPending.length ? '<section class="panel"><div class="panel-head"><div><p class="eyebrow">Después de la visita</p><h2>Agradecimientos pendientes</h2><p class="muted tiny">Turnos hechos en los últimos tres días.</p></div></div><div class="list">' + thanksPending.map(a => { const client=clientById(a.clienta_id), phone=client?.telefono||a.telefono_publico; return '<div class="list-row thanks-pending-row"><div class="list-row-main"><strong>' + e(client?.nombre||a.nombre_publico||'Clienta') + '</strong><small>' + e(datePY(a.fecha)) + ' · ' + e(appointmentServiceLabel(a)) + '</small></div><div class="table-actions thanks-pending-actions">' + callLink(phone) + (phone ? '<button class="small-button primary" data-action="send-thanks" data-id="' + e(a.id) + '">WhatsApp</button>' : '') + '<button class="small-button" data-action="mark-thanks" data-id="' + e(a.id) + '">Marcar enviado</button></div></div>'; }).join('') + '</div></section>' : '') +
+    '<div class="content-grid home-content-grid"><section class="panel home-schedule-panel"><div class="panel-head"><div><p class="eyebrow">En orden</p><h2>Agenda de hoy</h2></div><a href="#agenda">Ver agenda →</a></div><div class="list appointment-timeline">' + (scheduleRows.join('') || empty('Un día para organizar', 'Todavía no tenés turnos para hoy. Agregá uno o compartí tu link de reservas.', '▦')) + '</div><div class="toolbar mt-1"><button class="button primary" data-action="new-appointment">＋ Nuevo turno</button><button class="button soft" data-action="share-booking">Compartir reservas</button></div></section><div class="home-side-panels"><section class="panel"><div class="panel-head"><div><p class="eyebrow">Fechas especiales</p><h2>Cumpleaños</h2></div><span class="home-panel-icon">' + iconSVG('gift') + '</span></div><div class="list">' + (birthdayRows.join('') || empty('Esta semana está tranquila', 'Los próximos cumpleaños van a aparecer acá.', iconSVG('gift'))) + '</div></section>' +
+    (reactivationRows.length ? '<section class="panel"><div class="panel-head"><div><p class="eyebrow">Hace 60 días o más</p><h2>Volvé a conectar</h2></div><a href="#clientas">Ver todas</a></div><div class="list">' + reactivationRows.join('') + '</div></section>' : '') +
+    '</div></div><section class="panel"><div class="panel-head"><div><p class="eyebrow">Atajos</p><h2>Lo que necesitás, a mano</h2></div></div><div class="toolbar"><button class="button soft" data-action="new-client">＋ Agregar clienta</button><button class="button soft" data-action="share-catalog">Compartir catálogo</button><a class="button ghost" href="#recordatorios">Turnos de mañana</a><button class="button ghost" data-action="backup-json">Descargar respaldo</button></div></section></div>';
 }
-
 function birthdayInWeek(value) {
   if (!value) return false;
   const [year, month, day] = dateInput().split('-').map(Number);
@@ -586,11 +648,13 @@ function birthdayInWeek(value) {
 
 function renderClients() {
   const search = state.search.trim().toLocaleLowerCase('es');
-  const clients = clientsSorted().filter(c => !search || `${c.nombre} ${c.telefono} ${c.notas||''}`.toLocaleLowerCase('es').includes(search));
-  const rows = clients.map(c => `<tr><td><button class="text-button" data-action="client-details" data-id="${e(c.id)}">${e(c.nombre)}</button></td><td>${e(c.telefono||'—')}</td><td>${e(c.email||'—')}</td><td>${money(c.deuda_gs)}</td><td>${Number(c.visitas||0)} visitas${Number(c.visitas||0)>=Number(state.profile?.visitas_premio||10)?' · 🎁':''}</td><td><div class="table-actions"><button class="small-button" data-action="client-details" data-id="${e(c.id)}">Ficha</button>${callLink(c.telefono)}<button class="small-button" data-action="edit-client" data-id="${e(c.id)}">Editar</button><button class="small-button danger" data-action="delete-row" data-table="clientas" data-id="${e(c.id)}">Borrar</button>${c.telefono?`<a class="small-button primary" href="${waLink(c.telefono,templateMessage(Number(c.deuda_gs)>0?'deuda':'promo',c))}" target="_blank" rel="noopener">WhatsApp</a>`:''}</div></td></tr>`);
-  return `${heading('Clientas','Tu comunidad',`<button class="button primary" data-action="new-client">＋ Agregar clienta</button>`)}<div class="toolbar"><input class="search" id="client-search" type="search" placeholder="Buscar por nombre, teléfono o notas…" value="${e(state.search)}"><button class="button soft" data-action="import-clients">Importar CSV</button><button class="button ghost" data-action="export-clients">Exportar CSV</button></div>${table(['Nombre','Teléfono','Correo','Deuda','Fidelización',''],rows)}`;
+  const clients = clientsSorted().filter(c => !search || (c.nombre + ' ' + (c.telefono || '') + ' ' + (c.notas || '')).toLocaleLowerCase('es').includes(search));
+  const rows = clients.map(c => {
+    const latest = lastVisit(c.id);
+    return '<tr><td><div class="client-table-name"><span class="avatar tone-' + avatarTone(c.nombre) + '">' + e(clientInitials(c.nombre)) + '</span><button class="text-button" data-action="client-details" data-id="' + e(c.id) + '">' + e(c.nombre) + '</button></div></td><td>' + e(c.telefono || '—') + '</td><td>' + e(c.email || '—') + '</td><td>' + money(c.deuda_gs) + '</td><td>' + (latest ? e(datePY(latest)) : '<span class="muted">Sin visitas</span>') + '</td><td>' + Number(c.visitas || 0) + ' visitas' + (Number(c.visitas || 0) >= Number(state.profile?.visitas_premio || 10) ? ' · Premio disponible' : '') + '</td><td><div class="table-actions"><button class="small-button" data-action="client-details" data-id="' + e(c.id) + '">Ficha</button>' + callLink(c.telefono) + '<button class="small-button" data-action="edit-client" data-id="' + e(c.id) + '">Editar</button><button class="small-button danger" data-action="delete-row" data-table="clientas" data-id="' + e(c.id) + '">Borrar</button>' + (c.telefono ? '<a class="small-button primary" href="' + e(waLink(c.telefono,templateMessage(Number(c.deuda_gs) > 0 ? 'deuda' : 'promo',c))) + '" target="_blank" rel="noopener">WhatsApp</a>' : '') + '</div></td></tr>';
+  });
+  return heading('Clientas','Tu comunidad','<button class="button primary" data-action="new-client">＋ Agregar clienta</button>') + '<div class="toolbar"><input class="search" id="client-search" type="search" placeholder="Buscar por nombre, teléfono o notas…" value="' + e(state.search) + '"><button class="button soft" data-action="import-clients">Importar CSV</button><button class="button ghost" data-action="export-clients">Exportar CSV</button></div>' + table(['Clienta','Teléfono','Correo','Deuda','Última visita','Fidelización',''],rows);
 }
-
 function renderAgenda() {
   const date = state.agendaDate;
   const weekStart=dateInput(beginningOfWeek(new Date(`${date}T12:00:00`)));
@@ -618,7 +682,8 @@ function renderAgenda() {
     return `<div class="cal-day-column ${closed?'is-closed':''}" data-calendar-date="${e(day)}"><header>${['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'][weekday]} <strong>${e(day.slice(8,10))}</strong>${closed?'<small>Cerrado</small>':''}</header><div class="cal-day-grid" style="height:${(end-start)/60*rowHeight}px;--calendar-start:${start}px" data-calendar-date="${e(day)}">${nowLine}${blocks}</div></div>`;
   }).join('');
   const title=state.agendaMode==='dia'?datePY(date):`${datePY(actualDates[0])} — ${datePY(actualDates.at(-1))}`;
-  return `${heading('Agenda','Turnos',`<button class="button primary" data-action="new-appointment">＋ Nuevo turno</button>`)}<div class="toolbar agenda-toolbar"><div class="agenda-date-controls"><button class="button ghost" data-action="agenda-prev" aria-label="Período anterior">←</button><label class="field agenda-date-field"><span class="tiny muted">${e(title)}</span><input id="agenda-date" type="date" value="${e(date)}"></label><button class="button ghost" data-action="agenda-next" aria-label="Período siguiente">→</button><button class="button soft" data-action="agenda-today">Hoy</button></div><div class="agenda-view-toggle"><button class="button ${state.agendaMode==='dia'?'soft':'ghost'}" data-action="agenda-day">Día</button><button class="button ${state.agendaMode==='semana'?'soft':'ghost'}" data-action="agenda-week">Semana</button></div></div><p class="muted tiny">Tocá un espacio libre para agendar. Mantené presionado un turno para moverlo. Los turnos amarillos tienen saldo pendiente.</p><div class="calendar-scroll ${state.agendaMode==='semana'?'week-view':''}"><div class="calendar-grid" style="--cal-hours:${(end-start)/60};--cal-row:${rowHeight}px"><div class="cal-time-axis">${ticks}</div>${columns}</div></div>`;
+  const headingActions = '<div class="button-group"><button class="button primary" data-action="new-appointment">＋ Nuevo turno</button>' + (state.agendaMode === 'dia' ? '<button class="button ghost no-print" data-action="print-agenda">Imprimir agenda</button>' : '') + '</div>';
+  return `${heading('Agenda','Turnos',headingActions)}<p class="agenda-print-title">Agenda · ${e(title)}</p><div class="toolbar agenda-toolbar"><div class="agenda-date-controls"><button class="button ghost" data-action="agenda-prev" aria-label="Período anterior">←</button><label class="field agenda-date-field"><span class="tiny muted">${e(title)}</span><input id="agenda-date" type="date" value="${e(date)}"></label><button class="button ghost" data-action="agenda-next" aria-label="Período siguiente">→</button><button class="button soft" data-action="agenda-today">Hoy</button></div><div class="agenda-view-toggle"><button class="button ${state.agendaMode==='dia'?'soft':'ghost'}" data-action="agenda-day">Día</button><button class="button ${state.agendaMode==='semana'?'soft':'ghost'}" data-action="agenda-week">Semana</button></div></div><p class="muted tiny agenda-instructions">Tocá un espacio libre para agendar. Mantené presionado un turno para moverlo. Los turnos amarillos tienen saldo pendiente.</p><div class="calendar-scroll ${state.agendaMode==='semana'?'week-view':''}"><div class="calendar-grid" style="--cal-hours:${(end-start)/60};--cal-row:${rowHeight}px"><div class="cal-time-axis">${ticks}</div>${columns}</div></div>`;
 }
 
 function weekEnd(start) {
@@ -938,16 +1003,21 @@ function renderReports() {
   const appointmentsById = new Map(state.data.turnos.map(appointment => [appointment.id, appointment]));
   const rows = [...state.data.pagos].sort((a, b) => a.fecha.localeCompare(b.fecha) || String(a.created_at).localeCompare(String(b.created_at)));
   let filtered = rows,
+    previousFiltered = [],
     labels = [],
     values = [];
   const now = dateInput();
   if (state.reportMode === 'dia') {
     filtered = rows.filter(a => a.fecha === now);
+    previousFiltered = rows.filter(a => a.fecha === shiftDate(now, -1));
     labels = filtered.map(payment => timePY(payment.created_at));
     values = filtered.map(payment => Number(payment.monto_gs));
   } else if (state.reportMode === 'semana') {
     const start = dateInput(beginningOfWeek());
+    const previousStart = shiftDate(start, -7);
+    const previousEnd = shiftDate(now, -7);
     filtered = rows.filter(a => a.fecha >= start && a.fecha <= now);
+    previousFiltered = rows.filter(a => a.fecha >= previousStart && a.fecha <= previousEnd);
     const days = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
     labels = days;
     values = days.map((_, i) => filtered.filter(a => {
@@ -956,6 +1026,11 @@ function renderReports() {
   } else {
     const month = now.slice(0, 7);
     filtered = rows.filter(a => a.fecha.startsWith(month));
+    const previousMonthStart = shiftDate(month + '-01', -1).slice(0, 8) + '01';
+    const [previousYear, previousMonthNumber] = previousMonthStart.split('-').map(Number);
+    const previousMonthLastDay = new Date(Date.UTC(previousYear, previousMonthNumber, 0)).getUTCDate();
+    const previousMonthEnd = previousMonthStart.slice(0, 8) + String(Math.min(Number(now.slice(-2)), previousMonthLastDay)).padStart(2, '0');
+    previousFiltered = rows.filter(a => a.fecha >= previousMonthStart && a.fecha <= previousMonthEnd);
     labels = Array.from({
       length: 31
     }, (_, i) => String(i + 1));
@@ -966,6 +1041,7 @@ function renderReports() {
     values
   };
   const total = filtered.reduce((n, payment) => n + Number(payment.monto_gs || 0), 0),
+    previousTotal = previousFiltered.reduce((n, payment) => n + Number(payment.monto_gs || 0), 0),
     serviceTotals = new Map(),
     employeeTotals = new Map();
   for (const payment of filtered) {
@@ -977,7 +1053,10 @@ function renderReports() {
     employeeTotals.set(en, (employeeTotals.get(en) || 0) + Number(payment.monto_gs || 0));
   }
   const breakdown = map => [...map].sort((a, b) => b[1] - a[1]).map(([name, value]) => `<div class="list-row"><div class="list-row-main"><strong>${e(name)}</strong></div><strong>${money(value)}</strong></div>`).join('') || empty('Sin movimientos', 'Los pagos registrados aparecerán acá.');
-  return `${heading('Ingresos','Reportes')}<div class="toolbar"><button class="button ${state.reportMode==='dia'?'soft':'ghost'}" data-report="dia">Día</button><button class="button ${state.reportMode==='semana'?'soft':'ghost'}" data-report="semana">Semana</button><button class="button ${state.reportMode==='mes'?'soft':'ghost'}" data-report="mes">Mes</button></div><div class="metrics-grid">${metric('Ingresos del período',money(total),`${filtered.length} pagos registrados`)}</div><div class="content-grid"><section class="panel"><div class="panel-head"><h2>Ingresos por ${state.reportMode==='dia'?'hora de pago':state.reportMode==='semana'?'día':'día del mes'}</h2></div><div class="chart-box"><div class="chart-legend" aria-hidden="true"><span><i class="chart-legend-rose"></i>Ingresos</span><span><i class="chart-legend-champagne"></i>Promedio</span></div><canvas id="income-chart" aria-label="Gráfico lineal de ingresos con referencia de promedio"></canvas></div></section><section class="panel"><h2>Por servicio</h2><div class="list">${breakdown(serviceTotals)}</div></section><section class="panel"><h2>Por empleada</h2><div class="list">${breakdown(employeeTotals)}</div></section></div>`;
+  const previousPeriodLabel = state.reportMode === 'dia' ? 'ayer' : state.reportMode === 'semana' ? 'los mismos días de la semana pasada' : 'el mismo tramo del mes pasado';
+  const comparisonLabel = previousTotal ? ((total - previousTotal > 0 ? '+' : '') + Math.round((total - previousTotal) / previousTotal * 100) + '% frente a ' + previousPeriodLabel) : total ? 'Sin datos del período anterior' : 'Sin movimientos en ambos períodos';
+  const chartDetails = labels.map((label, index) => '<li><span>' + e(label) + '</span><strong>' + money(values[index]) + '</strong></li>').join('');
+  return `${heading('Ingresos','Reportes')}<div class="toolbar"><button class="button ${state.reportMode==='dia'?'soft':'ghost'}" data-report="dia">Día</button><button class="button ${state.reportMode==='semana'?'soft':'ghost'}" data-report="semana">Semana</button><button class="button ${state.reportMode==='mes'?'soft':'ghost'}" data-report="mes">Mes</button></div><div class="metrics-grid">${metric('Ingresos del período',money(total),`${filtered.length} pagos · ${comparisonLabel}`)}</div><div class="content-grid"><section class="panel"><div class="panel-head"><h2>Ingresos por ${state.reportMode==='dia'?'hora de pago':state.reportMode==='semana'?'día':'día del mes'}</h2></div><div class="chart-box"><div class="chart-legend" aria-hidden="true"><span><i class="chart-legend-rose"></i>Ingresos</span><span><i class="chart-legend-champagne"></i>Promedio</span></div><canvas id="income-chart" aria-label="Gráfico lineal de ingresos con referencia de promedio" aria-describedby="income-chart-data"></canvas></div><details class="chart-data-details" id="income-chart-data"><summary>Consultar valores del gráfico</summary><ul>${chartDetails}</ul></details></section><section class="panel"><h2>Por servicio</h2><div class="list">${breakdown(serviceTotals)}</div></section><section class="panel"><h2>Por empleada</h2><div class="list">${breakdown(employeeTotals)}</div></section></div>`;
 }
 
 function renderExpenses() {
@@ -1034,7 +1113,6 @@ function renderSettings() {
       <section class="panel"><h2>Respaldo y datos</h2><p class="muted tiny">El respaldo contiene la información del salón que puede leer tu cuenta.</p><div class="toolbar"><button class="button soft" data-action="backup-json">Descargar JSON</button><button class="button ghost" data-action="backup-csv">Descargar CSV</button></div></section>
       <section class="panel"><h2>Mensajes de WhatsApp</h2><p class="muted tiny">Variables: {nombre}, {fecha}, {hora}, {deuda}, {salon}; agradecimiento usa también {servicio} y {resena}.</p>${templates.map(t=>`<label class="field">${e(t.label)}<textarea class="template-input" data-template="${e(t.key)}" rows="3">${e(t.row?.contenido||t.defaultText)}</textarea></label>`).join('')}<button class="button primary" data-action="save-templates">Guardar mensajes</button></section>
       <section class="panel"><h2>Cambiar contraseña</h2><p class="muted tiny">Usá una contraseña nueva de al menos ocho caracteres.</p><form id="logged-password-form" class="password-settings-form"><label class="field">Nueva contraseña<input name="password" type="password" autocomplete="new-password" minlength="8" required></label><label class="field">Confirmar contraseña<input name="password_confirm" type="password" autocomplete="new-password" minlength="8" required></label><button class="button primary password-save" type="submit">Guardar contraseña</button><p id="logged-password-message" class="password-settings-message form-error" role="status" aria-live="polite"></p></form></section>
-      <section class="panel"><h2>Modo de pantalla</h2><p class="muted">Se guarda en este dispositivo.</p><button class="button ghost" data-action="toggle-theme">Cambiar tema</button></section>
     </div></div>`;
 }
 
@@ -1654,13 +1732,31 @@ function appointmentForm(item = {}) {
 function paymentForm(item) {
   if (!item) return;
   const c = clientById(item.clienta_id);
-  if(item.estado==='hecho'&&state.data.pagos.some(p=>p.turno_id===item.id)) return toast('Este turno ya tiene un pago. Abrí su detalle para ver o anular el cobro.');
-  state.quickThanks=false;
-  showModal('Cobro rápido', `<form id="quick-payment-form" class="form-grid"><p class="wide muted">${e(c?.nombre||'Clienta')} · ${e(appointmentServiceLabel(item))} · ${datePY(item.fecha)} ${timePY(item.hora)}</p>${formField('Monto recibido (Gs.)','monto_gs',item.precio_cierre_gs??item.precio_gs,'number',{required:true,min:0,max:item.precio_cierre_gs??item.precio_gs})}${formField('Fecha de pago','fecha',dateInput(),'date',{required:true})}<label class="check-field wide"><input name="agradecer" type="checkbox">Enviar agradecimiento por WhatsApp</label><div class="cash-methods wide"><button type="button" class="button primary" data-action="cash-medium" data-cash-medium="Efectivo" data-turn-id="${e(item.id)}">Efectivo</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Transferencia" data-turn-id="${e(item.id)}">Transferencia</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Tigo Money" data-turn-id="${e(item.id)}">Tigo Money</button><button type="button" class="button ghost" data-action="cash-medium" data-cash-medium="Otro" data-turn-id="${e(item.id)}">Otro medio</button></div><div id="other-medium-fields" class="wide" hidden>${formField('Especificá cómo pagó','otro_detalle','','text',{maxlength:60})}<button type="button" class="button primary" data-action="cash-other-confirm" data-cash-medium="Otro" data-turn-id="${e(item.id)}">Registrar pago</button></div><p class="wide muted tiny">Para cobrar en efectivo, abrí la caja desde el menú. Transferencia y Tigo Money no requieren efectivo inicial.</p><p class="wide muted tiny">Si abonás menos del precio, la diferencia queda como saldo pendiente en la ficha de la clienta.</p></form>`, '');
-  $('#quick-payment-form').addEventListener('submit',ev=>ev.preventDefault());
-  $('#modal-submit')?.remove(); $('#modal-footer').innerHTML='<button class="button ghost" type="button" data-modal-close>Cancelar</button>';
+  if (item.estado === 'hecho' && state.data.pagos.some(p => p.turno_id === item.id)) {
+    return toast('Este turno ya tiene un pago. Abrí su detalle para ver o anular el cobro.');
+  }
+  state.quickThanks = false;
+  const price = item.precio_cierre_gs ?? item.precio_gs;
+  const body = `<form id="quick-payment-form" class="form-grid">
+    <p class="wide muted">${e(c?.nombre || 'Clienta')} · ${e(appointmentServiceLabel(item))} · ${datePY(item.fecha)} ${timePY(item.hora)}</p>
+    <label class="field wide quick-payment-amount"><span>Monto recibido (Gs.)</span><input name="monto_gs" type="number" inputmode="numeric" min="0" step="1" max="${e(price)}" value="${e(price)}" required></label>
+    ${formField('Fecha de pago', 'fecha', dateInput(), 'date', { required: true })}
+    <label class="check-field wide"><input name="agradecer" type="checkbox">Enviar agradecimiento por WhatsApp</label>
+    <div class="cash-methods wide">
+      <button type="button" class="button primary" data-action="cash-medium" data-cash-medium="Efectivo" data-turn-id="${e(item.id)}"><span class="payment-method-icon">${iconSVG('cash')}</span><span>Efectivo</span></button>
+      <button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Transferencia" data-turn-id="${e(item.id)}"><span class="payment-method-icon">${iconSVG('bank')}</span><span>Transferencia</span></button>
+      <button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Tigo Money" data-turn-id="${e(item.id)}"><span class="payment-method-icon">${iconSVG('mobile')}</span><span>Tigo Money</span></button>
+      <button type="button" class="button ghost" data-action="cash-medium" data-cash-medium="Otro" data-turn-id="${e(item.id)}"><span class="payment-method-icon">${iconSVG('more')}</span><span>Otro medio</span></button>
+    </div>
+    <div id="other-medium-fields" class="wide" hidden>${formField('Especificá cómo pagó', 'otro_detalle', '', 'text', { maxlength: 60 })}<button type="button" class="button primary" data-action="cash-other-confirm" data-cash-medium="Otro" data-turn-id="${e(item.id)}">Registrar pago</button></div>
+    <p class="wide muted tiny">Para cobrar en efectivo, abrí la caja desde el menú. Transferencia y Tigo Money no requieren efectivo inicial.</p>
+    <p class="wide muted tiny">Si abonás menos del precio, la diferencia queda como saldo pendiente en la ficha de la clienta.</p>
+  </form>`;
+  showModal('Cobro rápido', body, '');
+  $('#quick-payment-form').addEventListener('submit', ev => ev.preventDefault());
+  $('#modal-submit')?.remove();
+  $('#modal-footer').innerHTML = '<button class="button ghost" type="button" data-modal-close>Cancelar</button>';
 }
-
 function selectOtherPayment(button) {
   const fields=$('#other-medium-fields');
   if(!fields) return;
@@ -1796,6 +1892,7 @@ async function handleAction(ev) {
     if (action === 'cash-detail') return showCashDetail(b.dataset.cashId);
     if (action === 'cash-detail-clear') { state.cashDetail = null; return applyView(); }
     if (action === 'cash-print') return window.print();
+    if (action === 'print-agenda') return window.print();
     if (action === 'cash-whatsapp') return shareCashClose();
     if (action === 'fab-toggle') { const open=$('#quick-actions').classList.toggle('open'); b.setAttribute('aria-expanded',String(open)); return; }
     if (action === 'fab-appointment') { $('#quick-actions').classList.remove('open'); return appointmentForm(); }
@@ -2055,22 +2152,63 @@ async function clientDetails(id) {
     const due=outstandingTurnDebt(a);
     return `<div class="list-row ${due?'turn-has-debt':''}"><div class="list-row-main"><button class="text-button" data-action="appointment-details" data-id="${e(a.id)}"><strong>${datePY(a.fecha)} · ${e(timePY(a.hora))} · ${e(appointmentServiceLabel(a))}</strong></button><small>${e(a.estado)} · ${money(a.precio_cierre_gs??a.precio_gs)}${due?` · Saldo pendiente: ${money(due)}`:''} · ${e(a.notas||'')}</small></div>${callLink(c.telefono)}<button class="small-button" data-action="appointment-details" data-id="${e(a.id)}">Detalle</button></div>`;
   }).join('') || empty('Sin historial', 'Los turnos de esta clienta aparecerán acá.');
-  const photoHTML = photos.map(p => signed[p.id] ? `<div class="photo-tile"><a href="${e(signed[p.id])}" target="_blank" rel="noopener"><img src="${e(signed[p.id])}" alt="Foto ${e(p.tipo)}"><small>${e(p.tipo)}</small></a><button class="photo-delete" data-action="delete-row" data-table="fotos_clienta" data-id="${e(p.id)}" aria-label="Eliminar foto">×</button></div>` : '').join('');
+  const photoHTML = photos.map(p => signed[p.id] ? `<div class="photo-tile"><a href="${e(signed[p.id])}" target="_blank" rel="noopener"><img src="${e(signed[p.id])}" alt="Foto ${e(p.tipo)}" loading="lazy" decoding="async"><small>${e(p.tipo)}</small></a><button class="photo-delete" data-action="delete-row" data-table="fotos_clienta" data-id="${e(p.id)}" aria-label="Eliminar foto">×</button></div>` : '').join('');
   const paymentHistory = payments.map(p => `<div class="list-row"><div class="list-row-main"><strong>${datePY(p.fecha)} · ${money(p.monto_gs)}</strong><small>${e(p.medio)} · ${e(p.nota||'Abono')}</small></div></div>`).join('') || '<p class="muted tiny">Todavía no hay pagos registrados.</p>';
   const loyalty = Number(c.visitas || 0),
     goal = Number(state.profile.visitas_premio || 10),
     award = loyalty > 0 && loyalty % goal === 0;
   const paymentButtons = visits.filter(a => a.estado !== 'cancelado').map(a => `<div class="list-row"><div class="list-row-main"><strong>${datePY(a.fecha)} · ${e(appointmentServiceLabel(a))}</strong><small>${e(a.estado)} · ${money(a.precio_gs)}</small></div><button class="small-button primary" data-action="pay-appointment" data-id="${e(a.id)}">Registrar abono</button></div>`).join('') || '<p class="muted tiny">No hay turnos para asociar un pago.</p>';
+  const lastVisitDate = visits.find(a => a.estado === 'hecho')?.fecha;
   const body = `<div class="profile-layout">
-    <section class="profile-side panel"><div class="avatar">${e(c.nombre.slice(0,1).toUpperCase())}</div><div><h3>${e(c.nombre)}</h3><p class="muted tiny">${e(c.telefono||'Sin teléfono')}<br>${e(c.email||'')}</p><div class="table-actions">${callLink(c.telefono)}${c.telefono?`<a class="small-button primary" href="${waLink(c.telefono,'Hola '+c.nombre)}" target="_blank" rel="noopener">WhatsApp</a>`:''}</div><strong>${money(c.deuda_gs)}</strong><small class="muted"> saldo pendiente</small></div></section>
-    <section class="profile-detail"><div class="loyalty-box">💝 ${loyalty} visitas · ${award?'¡Le corresponde premio!':`${Math.max(0,goal-loyalty%goal)} para su próximo premio (${e(state.profile.premio_descripcion||'premio')})`}</div>
-      <div class="panel"><div class="panel-head"><h3>Historial de turnos</h3><button class="small-button primary" data-action="new-client-appointment" data-id="${e(c.id)}">Nuevo turno</button></div><div class="list">${history}</div></div>
-      <div class="panel"><div class="panel-head"><h3>Fórmulas y notas técnicas</h3><button class="small-button" data-action="edit-client" data-id="${e(c.id)}">Editar notas</button></div><p class="muted">${e(c.notas||'Sin notas técnicas registradas.')}</p></div>
-      <div class="panel"><div class="panel-head"><h3>Fotos antes y después</h3><label class="small-button primary">＋ Subir foto<input id="client-photo-upload" type="file" accept="image/jpeg,image/png,image/webp" hidden></label></div><div class="photo-grid">${photoHTML||'<p class="muted tiny">Todavía no hay fotos guardadas.</p>'}</div></div>
-      <div class="panel"><h3>Pagos y abonos</h3><div class="list">${paymentHistory}</div><h3>Registrar un abono</h3>${paymentButtons}</div>
+    <section class="profile-side panel"><div class="avatar tone-${avatarTone(c.nombre)}">${e(clientInitials(c.nombre))}</div><div><h3>${e(c.nombre)}</h3><p class="muted tiny">${e(c.telefono||'Sin teléfono')}<br>${e(c.email||'')}</p><div class="table-actions">${callLink(c.telefono)}${c.telefono?`<a class="small-button primary" href="${e(waLink(c.telefono,'Hola '+c.nombre))}" target="_blank" rel="noopener">WhatsApp</a>`:''}</div><strong>${money(c.deuda_gs)}</strong><small class="muted"> saldo pendiente</small></div></section>
+    <section class="profile-detail">
+      <div class="profile-tabs" role="tablist" aria-label="Ficha de ${e(c.nombre)}">
+        <button id="client-tab-summary" type="button" role="tab" data-client-tab="summary" aria-controls="client-panel-summary" aria-selected="true" tabindex="0">Resumen</button>
+        <button id="client-tab-visits" type="button" role="tab" data-client-tab="visits" aria-controls="client-panel-visits" aria-selected="false" tabindex="-1">Turnos</button>
+        <button id="client-tab-payments" type="button" role="tab" data-client-tab="payments" aria-controls="client-panel-payments" aria-selected="false" tabindex="-1">Pagos</button>
+        <button id="client-tab-notes" type="button" role="tab" data-client-tab="notes" aria-controls="client-panel-notes" aria-selected="false" tabindex="-1">Notas</button>
+        <button id="client-tab-photos" type="button" role="tab" data-client-tab="photos" aria-controls="client-panel-photos" aria-selected="false" tabindex="-1">Fotos</button>
+      </div>
+      <section id="client-panel-summary" class="profile-tab-panel panel" role="tabpanel" aria-labelledby="client-tab-summary">
+        <div class="loyalty-box">💝 ${loyalty} visitas · ${award?'¡Le corresponde premio!':`${Math.max(0,goal-loyalty%goal)} para su próximo premio (${e(state.profile.premio_descripcion||'premio')})`}</div>
+        <div class="profile-summary-grid"><div><span class="muted tiny">Última visita</span><strong>${lastVisitDate?e(datePY(lastVisitDate)):'Todavía no vino'}</strong></div><div><span class="muted tiny">Turnos registrados</span><strong>${visits.length}</strong></div><div><span class="muted tiny">Saldos pendientes</span><strong>${money(c.deuda_gs)}</strong></div></div>
+        <button class="button primary" data-action="new-client-appointment" data-id="${e(c.id)}">＋ Agendar turno</button>
+      </section>
+      <section id="client-panel-visits" class="profile-tab-panel panel" role="tabpanel" aria-labelledby="client-tab-visits" hidden><div class="panel-head"><h3>Historial de turnos</h3><button class="small-button primary" data-action="new-client-appointment" data-id="${e(c.id)}">Nuevo turno</button></div><div class="list">${history}</div></section>
+      <section id="client-panel-payments" class="profile-tab-panel panel" role="tabpanel" aria-labelledby="client-tab-payments" hidden><h3>Pagos y abonos</h3><div class="list">${paymentHistory}</div><h3>Registrar un abono</h3>${paymentButtons}</section>
+      <section id="client-panel-notes" class="profile-tab-panel panel" role="tabpanel" aria-labelledby="client-tab-notes" hidden><div class="panel-head"><h3>Fórmulas y notas técnicas</h3><button class="small-button" data-action="edit-client" data-id="${e(c.id)}">Editar notas</button></div><p class="muted">${e(c.notas||'Sin notas técnicas registradas.')}</p></section>
+      <section id="client-panel-photos" class="profile-tab-panel panel" role="tabpanel" aria-labelledby="client-tab-photos" hidden><div class="panel-head"><h3>Fotos antes y después</h3><label class="small-button primary">＋ Subir foto<input id="client-photo-upload" type="file" accept="image/jpeg,image/png,image/webp" hidden></label></div><div class="photo-grid">${photoHTML||'<p class="muted tiny">Todavía no hay fotos guardadas.</p>'}</div></section>
     </section></div>`;
   showModal(c.nombre, body, 'Cerrar');
   $('#modal-footer').innerHTML = '<button class="button ghost" type="button" data-modal-close>Cerrar ficha</button>';
+  const profileTabs = $$('#modal-body [data-client-tab]');
+  const activateProfileTab = (tab, focus = false) => {
+    profileTabs.forEach(button => {
+      const active = button.dataset.clientTab === tab;
+      button.setAttribute('aria-selected', String(active));
+      button.tabIndex = active ? 0 : -1;
+      const panel = document.getElementById(button.getAttribute('aria-controls'));
+      if (panel) panel.hidden = !active;
+      if (active && focus) button.focus();
+    });
+  };
+  $('#modal-body').onclick = ev => {
+    const tab = ev.target.closest('[data-client-tab]');
+    if (tab) activateProfileTab(tab.dataset.clientTab);
+  };
+  $('#modal-body').onkeydown = ev => {
+    const current = ev.target.closest('[data-client-tab]');
+    if (!current) return;
+    const index = profileTabs.indexOf(current);
+    let next = index;
+    if (ev.key === 'ArrowRight') next = (index + 1) % profileTabs.length;
+    else if (ev.key === 'ArrowLeft') next = (index - 1 + profileTabs.length) % profileTabs.length;
+    else if (ev.key === 'Home') next = 0;
+    else if (ev.key === 'End') next = profileTabs.length - 1;
+    else return;
+    ev.preventDefault();
+    activateProfileTab(profileTabs[next].dataset.clientTab, true);
+  };
   $('#modal-body').onchange = ev => {
     if (ev.target.id === 'client-photo-upload') handlePhotoUpload(ev).catch(error => toast(requestError(error), 'error'));
   };
@@ -2591,6 +2729,7 @@ async function init() {
   });
   $('#theme-toggle').addEventListener('click', () => setTheme(document.body.classList.contains('dark') ? 'light' : 'dark'));
   $('#mobile-theme-toggle').addEventListener('click', () => setTheme(document.body.classList.contains('dark') ? 'light' : 'dark'));
+
   const sidebarCollapsed = localStorage.getItem('agendapora-sidebar-collapsed') === 'true';
   $('#app-shell').classList.toggle('sidebar-collapsed', sidebarCollapsed);
   $('#sidebar-collapse').setAttribute('aria-expanded', String(!sidebarCollapsed));

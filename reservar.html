@@ -1,42 +1,83 @@
 <!doctype html>
+
 <html lang="es-PY">
+
 <head>
+
   <meta charset="utf-8">
+
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <meta name="theme-color" content="#87344F">
+
   <meta name="description" content="Reservá tu próximo turno.">
+
   <title>Reservar turno · AgendaPorã</title>
+
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="css/style.css?v=20261020-boutique1">
+
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+
   <script type="module" src="js/reservar.js"></script>
+
 </head>
+
 <body class="booking-page">
+
   <div id="toast-region" class="toast-region" aria-live="polite"></div>
+
   <main class="booking-shell">
+
     <a class="brand booking-brand" href="index.html"><img id="salon-logo" src="icons/icon.svg" alt=""><span><strong id="salon-name">Reservas</strong><small>Reservá tu próximo turno</small></span></a>
-    <section id="booking-card" class="booking-card">
+
+    <section class="booking-card">
+
       <p class="eyebrow">Agenda en línea</p><h1>Elegí tu turno</h1>
+
       <p id="booking-intro" class="muted">Cargando horarios disponibles…</p>
+
       <form id="booking-form" class="form-grid hidden">
+
         <fieldset class="field wide booking-service-field">
+
           <legend>Servicios <span class="muted">(podés elegir varios)</span></legend>
+
           <div id="booking-services" class="booking-services" role="group" aria-label="Elegí uno o varios servicios"></div>
-          <p id="booking-services-summary" class="booking-services-summary" aria-live="polite"></p>
+
         </fieldset>
+
+        <p id="booking-services-summary" class="booking-services-summary wide" aria-live="polite"></p>
+
         <label class="field booking-date-field">Día<input id="booking-date" type="date" required></label>
-        <label class="field">Horario<select id="booking-time" required><option value="">Elegí un horario</option></select></label>
+
+        <fieldset class="field wide booking-time-field"><legend>Horario</legend><select id="booking-time" hidden aria-hidden="true" tabindex="-1"><option value="">Elegí un horario</option></select><div id="booking-time-grid" class="booking-time-grid" role="radiogroup" aria-label="Horarios disponibles"><p class="booking-time-message" role="status">Elegí un servicio y un día para ver los horarios.</p></div></fieldset>
+
         <label class="field">Tu nombre<input id="booking-client-name" maxlength="80" required autocomplete="name"></label>
+
         <label class="field">Teléfono / WhatsApp<input id="booking-phone" type="tel" maxlength="24" required autocomplete="tel" placeholder="09XX XXX XXX"></label>
+
         <label class="field">Correo (opcional)<input id="booking-email" type="email" maxlength="160" autocomplete="email" placeholder="tunombre@correo.com"></label>
+
         <label class="honeypot" aria-hidden="true">Dejar vacío<input id="booking-website" tabindex="-1" autocomplete="off"></label>
+
         <button class="button primary wide" type="submit">Solicitar reserva</button>
+
         <p id="booking-error" class="form-error wide" role="alert"></p>
+
       </form>
+
       <div id="booking-success" class="success-panel hidden"><div class="success-icon">✓</div><h2>¡Solicitud enviada!</h2><p>El salón va a confirmar tu horario. Gracias por reservar.</p></div>
+
     </section>
+
     <footer class="booking-footer">Reservas simples con <strong>AgendaPorã</strong></footer>
+
   </main>
+
 </body>
+
 </html>

@@ -143,3 +143,23 @@ La pantalla existente de **Cierre de caja** era un reporte diario, no una sesió
 
 - [ ] En la navegación móvil, verificar los cuatro destinos visibles (Inicio, Agenda, Clientas y Caja) y que Más abra todas las demás secciones; confirmar el estado activo y que la ventana cierra con Escape, toque afuera y selección.
 - [ ] En escritorio, colapsar y expandir la barra lateral; revisar que los iconos conserven nombre accesible, que la búsqueda global siga visible y que la preferencia sobreviva a una recarga.
+
+### Fase 3 · pantallas clave · 20/10/2026
+
+- Inicio: saludo en hora de Paraguay, fecha, turnos del día, ingresos, deuda, variación y accesos de agenda; el resumen compartible usa WhatsApp. Cumpleaños y reactivaciones abren acciones existentes.
+- Agenda: se conserva el movimiento de turnos y se agrega impresión solo para la vista diaria. La impresión oculta controles y prioriza el calendario.
+- Clientas: avatar de iniciales con tono estable, deuda y última visita en la lista. La ficha ofrece pestañas con navegación por flechas, Inicio y Fin; las acciones de pago, edición, turno y fotos conservan sus hooks.
+- Reserva: selector `#booking-time` y RPC siguen vigentes. La grilla táctil expone horarios como radios, con flechas, Inicio y Fin; el resumen de servicios queda pegado al borde inferior durante el formulario.
+- Cobro y reportes: cuatro medios de pago con iconos; el monto recibido queda destacado. Ingresos comparan el tramo actual con el mismo tramo anterior y el gráfico ofrece sus valores en una lista accesible.
+- Revisión estática: sintaxis JS, referencias, IDs, CSS y contraste calculado. No se inició sesión ni se consultaron datos reales. La vista previa local quedó omitida porque la herramienta de navegador no aceptó `file://`.
+- No se agrega deshacer para borrar: la eliminación de clientas también borra sus fotos privadas y las RPC existentes no ofrecen una restauración segura. No se agregan rachas/logros persistentes ni pantalla de novedades porque requieren estado y reglas de negocio nuevos.
+
+### Pruebas manuales recomendadas
+
+- [ ] En 360 px y 1280 px, abrir Inicio en claro/oscuro: revisar los cuatro indicadores, saludo, agenda, resumen por WhatsApp y tarjetas accionables.
+- [ ] En Agenda, abrir vista Día, imprimir y comprobar que los controles no salen en papel; alternar a Semana y comprobar el desplazamiento horizontal dentro del calendario.
+- [ ] En Clientas, abrir una ficha y recorrer las cinco pestañas con clic, Tab, flechas, Inicio y Fin; desde Pagos registrar un abono y desde Fotos subir una imagen de prueba.
+- [ ] En Reservas, elegir servicios y fecha; seleccionar horario con toque, teclado y flechas; enviar una solicitud de prueba y verificar que el resumen quede visible al desplazarse.
+- [ ] En Cobro rápido, comprobar el monto protagonista y los cuatro medios de pago; registrar un pago parcial de prueba y revisar el saldo restante.
+- [ ] En Reportes, comparar día, semana y mes; abrir “Consultar valores del gráfico” y confirmar que coincida con la línea.
+- [ ] Revisar Admin, bloqueo por vencimiento, estados vacíos, carga, tablas móviles, foco y áreas táctiles en ambos temas.

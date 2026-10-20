@@ -201,7 +201,7 @@ La dirección visual del producto es **boutique de belleza moderna**: ciruela y 
 
 Abrí [guia-ui.html](guia-ui.html) en el navegador para revisar tipografía, paleta, botones, campos y errores, estados, tarjetas, tablas, gráficos, pestañas, paginación, diálogos y esqueletos. Es una página de referencia independiente: no está enlazada desde la navegación del salón ni contiene datos de clientas. La implementación mantiene HTML/CSS/JS sin build ni frameworks pesados.
 
-Decisiones visuales: se conserva el onboarding guiado existente; las pantallas usan nombres y datos de la cuenta cargada por la usuaria; las nuevas muestras de la guía usan únicamente nombres ficticios. No se agregan logros, confeti ni novedades en esta fase para mantener el alcance visual sin introducir estados o comportamiento de negocio nuevos.
+Decisiones visuales: se conserva el onboarding guiado existente. El inicio ahora comparte un resumen por WhatsApp y muestra accesos contextuales; la agenda del día se puede imprimir. La ficha de clientas agrupa Resumen, Turnos, Pagos, Notas y Fotos en pestañas accesibles. La reserva pública presenta los horarios en una cuadrícula que mantiene el valor del selector existente para enviar la solicitud. Los cambios conservan los datos y RPC actuales.
 ## Archivos principales
 
 - [`index.html`](index.html): app móvil de la peluquera.

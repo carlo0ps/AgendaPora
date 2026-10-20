@@ -1284,7 +1284,6 @@ font-size:1.45rem}
   .cash-print-area .section-heading .button-group {width:100%}
   .cash-print-area .section-heading .button-group .button {flex:1;min-width:44px}
   .cash-print-area .toolbar {flex-wrap:wrap;align-items:flex-start}
-  .cash-print-area #cash-date {width:100%;min-width:0}
 }
 
 .cash-breakdown-panel {min-width:0}
@@ -1948,3 +1947,89 @@ input[type="checkbox"], input[type="radio"], progress { accent-color: var(--prim
   .table-component td[colspan]::before { display: none; }
   .table-component .table-actions { justify-content: flex-end; }
 }
+
+/* Fase 3 · inicio, ficha de clienta y horarios de reserva */
+.home-hero { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:24px; padding:clamp(22px,4vw,38px); overflow:hidden; border:1px solid var(--border); border-radius:var(--radius-xl); background:linear-gradient(120deg,var(--surface) 45%,var(--primary-soft)); box-shadow:var(--elevation-1); }
+.home-hero-copy { min-width:0; }
+.home-hero-copy h2 { margin:0 0 8px; color:var(--primary); font:600 clamp(28px,4vw,42px)/1.08 var(--font-display); letter-spacing:-.035em; }
+.home-hero-copy > p:not(.eyebrow) { max-width:58ch; margin-bottom:20px; color:var(--text-muted); }
+.home-hero-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.home-hero-actions .button { min-height:46px; }
+.home-date-card { display:grid; min-width:132px; justify-items:center; padding:18px; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface-raised); box-shadow:var(--elevation-1); text-align:center; }
+.home-date-card span { color:var(--text-muted); font-size:13px; text-transform:capitalize; }
+.home-date-card strong { color:var(--primary); font:600 48px/1.1 var(--font-display); font-variant-numeric:tabular-nums; }
+.home-period-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.home-period-summary > span { display:grid; gap:4px; padding:16px 18px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface); color:var(--text-muted); font-size:13px; }
+.home-period-summary strong { color:var(--text); font-size:20px; font-variant-numeric:tabular-nums; }
+.home-period-summary small { color:var(--text-muted); }
+.home-content-grid { align-items:start; }
+.home-side-panels { display:grid; gap:16px; }
+.home-panel-icon { display:grid; width:42px; height:42px; place-items:center; border-radius:14px; background:var(--primary-soft); color:var(--primary); }
+.home-panel-icon svg { width:22px; height:22px; }
+.appointment-timeline .list-row { align-items:center; }
+.dashboard-appointment-row .avatar { width:42px; height:42px; border-radius:15px; }
+.dashboard-call .small-button { min-width:44px; }
+.avatar.tone-0 { background:var(--primary-soft); color:var(--primary); }
+.avatar.tone-1 { background:var(--success-surface); color:var(--success); }
+.avatar.tone-2 { background:var(--warning-surface); color:var(--warning); }
+.avatar.tone-3 { background:var(--danger-surface); color:var(--danger); }
+.avatar.tone-4 { background:var(--whatsapp-soft); color:var(--whatsapp); }
+.avatar.tone-5 { background:var(--surface-soft); color:var(--text); }
+.client-table-name { display:flex; align-items:center; gap:10px; min-width:180px; }
+.client-table-name .avatar { flex:none; }
+.profile-detail { min-width:0; }
+.profile-tabs { display:flex; gap:4px; overflow:auto; padding:4px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface-soft); scrollbar-width:thin; }
+.profile-tabs [role="tab"] { flex:1 0 auto; min-width:72px; min-height:44px; padding:8px 12px; border:0; border-radius:var(--radius-sm); background:transparent; color:var(--text-muted); font:600 13px/1.2 var(--font-body); }
+.profile-tabs [aria-selected="true"] { background:var(--surface); color:var(--primary); box-shadow:var(--elevation-1); }
+.profile-tab-panel { margin-top:12px; }
+.profile-summary-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:16px 0; }
+.profile-summary-grid > div { display:grid; gap:6px; padding:14px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface-raised); }
+.profile-summary-grid strong { overflow-wrap:anywhere; }
+.booking-time-field { min-width:0; margin:0; padding:0; border:0; }
+.booking-time-field legend { margin-bottom:8px; font-weight:700; }
+.booking-time-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }
+.booking-time-option { min-width:0; min-height:48px; padding:8px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface-raised); color:var(--text); font:600 14px/1.2 var(--font-body); font-variant-numeric:tabular-nums; transition:background var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard),transform var(--motion-fast) var(--ease-standard); }
+.booking-time-option:hover { border-color:var(--primary-fill); transform:translateY(-1px); }
+.booking-time-option.is-selected { border-color:var(--primary-fill); background:var(--primary-soft); color:var(--primary); box-shadow:inset 0 0 0 1px var(--primary-fill); }
+.booking-time-message { grid-column:1/-1; margin:0; padding:12px 14px; border:1px dashed var(--border); border-radius:var(--radius-sm); background:var(--surface-soft); color:var(--text-muted); }
+.booking-services-summary { position:sticky; bottom:max(8px,env(safe-area-inset-bottom)); z-index:var(--z-sticky); padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface-soft); box-shadow:var(--elevation-1); }
+.success-panel:not(.hidden) { animation:success-pop var(--motion-slow) var(--ease-standard) both; }
+@keyframes success-pop { from { opacity:0; transform:translateY(8px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
+.agenda-print-title { display:none; }
+@media (max-width:760px) {
+  .home-hero { grid-template-columns:minmax(0,1fr) auto; gap:12px; padding:20px; }
+  .home-date-card { min-width:88px; padding:12px; }
+  .home-date-card strong { font-size:38px; }
+  .home-date-card span { font-size:11px; }
+  .home-hero-actions .button { flex:1 1 calc(50% - 8px); }
+  .home-period-summary { gap:8px; }
+  .home-period-summary > span { padding:13px; }
+  .home-period-summary strong { font-size:17px; }
+  .profile-tabs { margin-inline:-2px; }
+  .profile-summary-grid { grid-template-columns:1fr; }
+  .booking-time-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
+@media (max-width:420px) {
+  .home-hero { grid-template-columns:minmax(0,1fr); }
+  .home-date-card { grid-template-columns:auto auto; justify-content:start; align-items:center; justify-items:start; column-gap:10px; width:max-content; min-width:0; }
+  .home-date-card strong { grid-row:span 2; }
+  .home-date-card span:first-child { align-self:end; }
+  .home-date-card span:last-child { align-self:start; }
+  .home-hero-actions .button { flex-basis:100%; }
+}
+@media print {
+  @page { size:A4 portrait; margin:12mm; }
+  .agenda-print-title { display:block; margin:0 0 12px; color:var(--print-text); font:600 22px/1.2 var(--font-display); }
+  .agenda-toolbar, .agenda-instructions, [data-action="new-appointment"], [data-action="print-agenda"] { display:none !important; }
+  .calendar-scroll { max-height:none; overflow:visible; border:0; box-shadow:none; }
+  .calendar-grid { min-width:0 !important; }
+  .cal-day-column { break-inside:avoid; }
+  .cal-event { print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+}
+
+.cash-methods .button { display:grid; grid-template-columns:30px 1fr; justify-content:start; text-align:left; min-height:64px; padding:10px 14px; }
+.payment-method-icon { display:grid; width:28px; height:28px; place-items:center; color:currentColor; }
+.payment-method-icon svg { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.quick-payment-amount { padding:16px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--primary-soft); }
+.quick-payment-amount span { color:var(--text-muted); }
+.quick-payment-amount input { min-height:68px; margin:8px 0 0; border-color:var(--primary-fill); background:var(--surface); color:var(--primary); font:600 clamp(28px,7vw,42px)/1.1 var(--font-display); font-variant-numeric:tabular-nums; }
