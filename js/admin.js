@@ -29,7 +29,7 @@ const BACKUP_REMINDER_KEY = 'agendapora-admin-last-backup';
 const BACKUP_TABLES = [
   'perfiles', 'clientas', 'servicios', 'turnos', 'turno_servicios', 'pagos', 'plantillas',
   'gastos', 'productos', 'empleadas', 'solicitudes_reserva', 'solicitudes_reserva_servicios',
-  'pagos_suscripcion', 'horarios_especiales', 'fotos_clienta'
+  'pagos_suscripcion', 'horarios_especiales', 'fotos_clienta', 'cajas', 'caja_movimientos'
 ];
 
 function credentialsReady() {
@@ -124,7 +124,10 @@ async function fetchBackupTable(table, onProgress) {
   let offset = 0;
   let total = null;
   do {
-    const { data, error } = await supabase.rpc('admin_respaldo_pagina', {
+    const procedure = table === 'cajas' || table === 'caja_movimientos'
+      ? 'admin_respaldo_caja_pagina'
+      : 'admin_respaldo_pagina';
+    const { data, error } = await supabase.rpc(procedure, {
       p_tabla: table,
       p_offset: offset,
       p_limite: BACKUP_PAGE_SIZE

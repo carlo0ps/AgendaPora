@@ -12,13 +12,13 @@ Creá un proyecto en [Supabase](https://supabase.com/dashboard), elegí una regi
 
 En **SQL Editor → New query**, pegá el contenido completo de [`supabase/schema.sql`](supabase/schema.sql) y ejecutalo como administrador del proyecto. El script crea las tablas, índices, triggers, RPCs, políticas RLS y los dos buckets de Storage.
 
-Si ya tenías una instalación anterior, ejecutá en **SQL Editor → New query**, en orden, las migraciones 01 a 18 (incluidas [`supabase/migracion_16.sql`](supabase/migracion_16.sql), [`supabase/migracion_17.sql`](supabase/migracion_17.sql) y [`supabase/migracion_18.sql`](supabase/migracion_18.sql)) y confirmá `Success` en cada una. La 16 unifica la disponibilidad pública e interna, agrega fechas especiales, pausas semanales, asignación por empleada, anticipación, horizonte, intervalos configurables y buffer. La 17 revoca el acceso directo de lectura de `anon` y `PUBLIC` a las tablas; las reservas públicas siguen usando RPCs. La 18 agrega el respaldo administrativo paginado. En una instalación nueva, ejecutá `schema.sql` y luego las migraciones 04, 06 a 18 en orden; las migraciones son idempotentes.
+Si ya tenías una instalación anterior, ejecutá en **SQL Editor → New query**, en orden, las migraciones 01 a 19 (incluidas [`supabase/migracion_16.sql`](supabase/migracion_16.sql), [`supabase/migracion_17.sql`](supabase/migracion_17.sql), [`supabase/migracion_18.sql`](supabase/migracion_18.sql) y [`supabase/migracion_19.sql`](supabase/migracion_19.sql)) y confirmá `Success` en cada una. La 16 unifica la disponibilidad pública e interna, agrega fechas especiales, pausas semanales, asignación por empleada, anticipación, horizonte, intervalos configurables y buffer. La 17 revoca el acceso directo de lectura de `anon` y `PUBLIC` a las tablas; las reservas públicas siguen usando RPCs. La 18 agrega el respaldo administrativo paginado. La 19 agrega sesiones de caja, movimientos automáticos de efectivo y el cierre inmutable. En una instalación nueva, ejecutá `schema.sql` y luego las migraciones 04, 06 a 19 en orden; las migraciones son idempotentes.
 
-Para llenar una cuenta de demostración, aplicá las migraciones hasta la 18 y después creá en Authentication un usuario dedicado con el correo reservado `demo@agendapora.test`. Ejecutá [`supabase/seed_demo.sql`](supabase/seed_demo.sql). El seed reemplaza únicamente los datos de esa cuenta e incluye pausas semanales y un cierre ficticio por fecha.
+Para llenar una cuenta de demostración, aplicá las migraciones hasta la 19 y después creá en Authentication un usuario dedicado con el correo reservado `demo@agendapora.test`. Ejecutá [`supabase/seed_demo.sql`](supabase/seed_demo.sql). El seed reemplaza únicamente los datos de esa cuenta e incluye pausas semanales, una fecha especial y una caja ficticia abierta.
 
 Para que las clientas elijan servicios múltiples, cambiar el slug y guardar el correo opcional, ejecutá las migraciones 13, 14 y 15 en ese orden. La migración 16 es necesaria para las reglas completas de disponibilidad descritas abajo.
 
-Después de aplicar la migración 16, configurá en **Mi salón** el intervalo de 15/30 minutos, anticipación, horizonte y preparación entre turnos. La pausa semanal se define con `pausa_inicio` y `pausa_fin` dentro del JSON de horarios. En **Fechas especiales** podés cerrar una fecha o reemplazar su horario y pausa. Luego de aplicar la migración 18, ejecutá [`supabase/tests_reservas.sql`](supabase/tests_reservas.sql) y [`supabase/tests_seguridad.sql`](supabase/tests_seguridad.sql) como postgres en SQL Editor; ambos muestran `PASS`/`FAIL` y revierten los datos de prueba. La prueba SQL de concurrencia secuencia las dos llamadas en una sesión; para comprobar la carrera real, repetí la reserva del mismo horario desde dos sesiones/navegadores casi a la vez y verificá que solo una solicitud quede pendiente.
+Después de aplicar la migración 16, configurá en **Mi salón** el intervalo de 15/30 minutos, anticipación, horizonte y preparación entre turnos. La pausa semanal se define con `pausa_inicio` y `pausa_fin` dentro del JSON de horarios. En **Fechas especiales** podés cerrar una fecha o reemplazar su horario y pausa. Luego de aplicar la migración 19, ejecutá [`supabase/tests_reservas.sql`](supabase/tests_reservas.sql) y [`supabase/tests_seguridad.sql`](supabase/tests_seguridad.sql) como postgres en SQL Editor; ambos muestran `PASS`/`FAIL` y revierten los datos de prueba. La prueba SQL de concurrencia secuencia las dos llamadas en una sesión; para comprobar la carrera real, repetí la reserva del mismo horario desde dos sesiones/navegadores casi a la vez y verificá que solo una solicitud quede pendiente.
 
 ### 3. Verificar Storage
 
@@ -49,10 +49,25 @@ El cambio de `es_admin`, `activo` y `vence_el` está protegido por trigger y por
 
 ### Respaldo completo
 
-1. Aplicá [`supabase/migracion_18.sql`](supabase/migracion_18.sql) después de las migraciones anteriores. La RPC `admin_respaldo_pagina` exige una sesión autenticada, una cuenta activa y `es_admin()` en el servidor.
+1. Aplicá [`supabase/migracion_18.sql`](supabase/migracion_18.sql) y después [`supabase/migracion_19.sql`](supabase/migracion_19.sql). Las RPC `admin_respaldo_pagina` y `admin_respaldo_caja_pagina` exigen sesión autenticada, cuenta activa y `es_admin()` en el servidor.
 2. Iniciá sesión en `admin.html` y elegí **Respaldo completo**. El navegador descarga `respaldo-AAAA-MM-DD.json`; la RPC entrega como máximo 250 filas por página y tabla.
-3. El archivo incluye perfiles de salones (sin perfiles administradores), clientas, servicios, turnos y sus servicios, pagos, plantillas, gastos, productos, empleadas, solicitudes y servicios solicitados, pagos de suscripción, horarios especiales y metadatos de fotos. No consulta `auth.users` ni incluye contraseñas o credenciales. Los archivos de imagen almacenados en Storage requieren un respaldo separado.
+3. El archivo incluye perfiles de salones (sin perfiles administradores), clientas, servicios, turnos y sus servicios, pagos, plantillas, gastos, productos, empleadas, solicitudes y servicios solicitados, pagos de suscripción, horarios especiales, cajas, movimientos de caja y metadatos de fotos. No consulta `auth.users` ni incluye contraseñas o credenciales. Los archivos de imagen almacenados en Storage requieren un respaldo separado.
 4. El aviso aparece si no hay una descarga registrada en ese navegador o si pasaron más de siete días. La fecha se guarda en `localStorage` del navegador y no en Supabase.
+
+### Caja y cierres
+
+1. Aplicá [`supabase/migracion_19.sql`](supabase/migracion_19.sql) después de la migración 18. La migración agrega `cajas`, `caja_movimientos`, `pagos.caja_id`, `gastos.caja_id` y `gastos.medio_pago`, además de RLS, triggers y RPCs. Repetirla es seguro.
+2. Abrí **Cierre de caja** e ingresá el efectivo inicial. El servidor registra fecha y hora de `America/Asuncion`; un índice único y un bloqueo transaccional impiden más de una caja abierta por salón.
+3. Cuando hay una caja abierta para hoy, los pagos y gastos con fecha de hoy se asocian a ella. Efectivo requiere esa caja y genera un movimiento automáticamente. Transferencia, Tigo Money y otros medios se desglosan en el cierre sin cambiar el efectivo físico. Los registros históricos con fecha anterior no se atribuyen a la caja actual.
+4. En la sesión podés registrar entradas y salidas manuales. Para corregir una diferencia usá la categoría **Ajuste** e ingresá un motivo. Los movimientos son inmutables; un cierre guarda el efectivo contado, esperado, la diferencia y un snapshot de pagos y gastos por medio.
+5. El historial permite filtrar por fechas y diferencias. Desde una sesión activa o un cierre guardado, **Imprimir A4 / 80 mm** abre el diálogo de impresión; elegí el tamaño de papel disponible en la impresora. **Enviar por WhatsApp** prepara el resumen.
+6. Para cargar los datos ficticios de los seeds, aplicá migración 19 antes de ejecutar `seed_demo.sql` o `seed_plantilla.sql`. Cada seed crea una caja abierta de prueba con movimientos inventados y el reinicio borra solo la cuenta objetivo.
+
+### Decisiones
+
+- Una caja abierta puede mantenerse tras medianoche para permitir su cierre; no admite nuevos movimientos manuales en un día distinto. Para empezar a operar ese día, primero cerrá la caja anterior.
+- Cobros y gastos con una fecha anterior se conservan como historial y no alteran el efectivo esperado de la sesión actual. Las correcciones posteriores al cierre se registran como ajuste con motivo en una caja abierta.
+- Transferencias y Tigo Money siempre quedan en el resumen por medio de pago y nunca se suman al efectivo físico.
 
 ### 6. Conectar la aplicación
 
@@ -126,7 +141,7 @@ Los enlaces nuevos de reservas usan `/reservar/SLUG` (por ejemplo, `https://carl
 - [ ] En un salón de prueba, intentá reservar en domingo, fecha cerrada, antes de abrir, dentro de la pausa, después del cierre y con un servicio que no entra. Verificá que no se acepte tampoco llamando directamente a `public_request_booking_multiple` o a la RPC legacy `public_request_booking`.
 - [ ] Configurá dos empleadas y un turno para A. El mismo tramo debe aparecer si B está libre; cuando ambas estén ocupadas no debe aparecer. Confirmá que turno cancelado libera el intervalo y que un turno pendiente/hecho bloquea su duración completa más el buffer.
 - [ ] Probá hoy con el margen mínimo, una fecha más allá del horizonte, mover un turno y aceptar una solicitud que dejó de estar disponible. El servidor debe rechazar los casos inválidos aunque el navegador manipule la fecha u hora.
-- [ ] Ejecutá [`supabase/tests_reservas.sql`](supabase/tests_reservas.sql) y [`supabase/tests_seguridad.sql`](supabase/tests_seguridad.sql) después de la migración 18. Ambos deben terminar con resultados `PASS`; revisá cada fila `FAIL` antes de publicar.
+- [ ] Ejecutá [`supabase/tests_reservas.sql`](supabase/tests_reservas.sql) y [`supabase/tests_seguridad.sql`](supabase/tests_seguridad.sql) después de la migración 19. Ambos deben terminar con resultados `PASS`; revisá cada fila `FAIL` antes de publicar.
 - Para la importación, las fechas de nacimiento admiten `dd/mm/aaaa` o `aaaa-mm-dd`; las fechas imposibles y teléfonos/correos inválidos se rechazan antes de guardar.
 
 ### 11. Respaldo y disponibilidad de Supabase

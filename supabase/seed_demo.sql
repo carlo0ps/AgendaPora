@@ -2,11 +2,19 @@
 -- Repetir el script reemplaza los datos de ese usuario demo; no toca otras cuentas.
 begin;
 do $$
-declare v_user uuid;
+declare v_user uuid; v_caja uuid; v_hoy date; v_caja_ok boolean;
 begin
   select id into v_user from auth.users where email='demo@agendapora.test' limit 1;
   if v_user is null then raise exception 'Creá demo@agendapora.test en Authentication antes de ejecutar este seed'; end if;
   if not exists(select 1 from public.perfiles where user_id=v_user) then raise exception 'Ejecutá schema.sql primero para crear el perfil'; end if;
+  v_hoy:=(now() at time zone 'America/Asuncion')::date;
+  select to_regclass('public.cajas') is not null and to_regclass('public.caja_movimientos') is not null
+    and exists(select 1 from information_schema.columns where table_schema='public' and table_name='pagos' and column_name='caja_id')
+    and exists(select 1 from information_schema.columns where table_schema='public' and table_name='gastos' and column_name='caja_id')
+    into v_caja_ok;
+
+  perform set_config('agendapora.seed_caja_reset','on',true);
+  if v_caja_ok then delete from public.caja_movimientos where user_id=v_user; end if;
 
   delete from public.fotos_clienta where user_id=v_user;
   delete from public.pagos where user_id=v_user;
@@ -14,6 +22,7 @@ begin
   delete from public.solicitudes_reserva where user_id=v_user;
   delete from public.horarios_especiales where user_id=v_user;
   delete from public.gastos where user_id=v_user;
+  if v_caja_ok then delete from public.cajas where user_id=v_user; end if;
   delete from public.productos where user_id=v_user;
   delete from public.empleadas where user_id=v_user;
   delete from public.plantillas where user_id=v_user;
@@ -73,13 +82,29 @@ begin
     else (array['Corte y brushing','Coloración completa','Manicura semipermanente','Tratamiento capilar'])[((g.i-9)%4)+1] end
   join public.empleadas e on e.user_id=v_user and e.nombre=case when g.i%2=0 then 'Camila Benítez' else 'Micaela Rojas' end;
 
+  if v_caja_ok then
+    v_caja:=md5(v_user::text||':caja:demo')::uuid;
+    insert into public.cajas(id,user_id,fecha,abierta_por,monto_inicial_gs)
+      values(v_caja,v_user,v_hoy,v_user,150000);
+    insert into public.caja_movimientos(id,user_id,caja_id,created_by,tipo,categoria,concepto,monto_gs)
+      values
+        (md5(v_user::text||':caja:demo:entrada')::uuid,v_user,v_caja,v_user,'entrada','otros','Cambio inicial ficticio',25000),
+        (md5(v_user::text||':caja:demo:salida')::uuid,v_user,v_caja,v_user,'salida','retiro','Retiro de prueba ficticio',10000);
+  else
+    raise notice 'Se omite la caja de demostración: aplicá supabase/migracion_19.sql primero.';
+  end if;
+
   insert into public.pagos(user_id,turno_id,clienta_id,fecha,monto_gs,medio,nota)
-  select v_user,t.id,t.clienta_id,t.fecha,t.precio_gs,case when extract(day from t.fecha)::integer%2=0 then 'Efectivo' else 'Transferencia' end,'Pago demo'
-  from public.turnos t where t.user_id=v_user and t.estado='hecho' and t.fecha < (now() at time zone 'America/Asuncion')::date-8
-  order by t.fecha limit 5;
+  select v_user,t.id,t.clienta_id,case when t.orden=1 then v_hoy else t.fecha end,t.precio_gs,
+    case when t.orden=1 then 'Efectivo' when extract(day from t.fecha)::integer%2=0 then 'Efectivo' else 'Transferencia' end,'Pago demo'
+  from (
+    select x.*,row_number() over(order by x.fecha,x.id) as orden
+    from public.turnos x where x.user_id=v_user and x.estado='hecho' and x.fecha<v_hoy-8
+    order by x.fecha,x.id limit 5
+  ) t;
 
   insert into public.gastos(user_id,fecha,concepto,categoria,monto_gs,nota) values
-    (v_user,(now() at time zone 'America/Asuncion')::date-2,'Reposición de tintes','Insumos',380000,'Tonos de coloración'),
+    (v_user,v_hoy,'Reposición de tintes','Insumos',380000,'Tonos de coloración'),
     (v_user,(now() at time zone 'America/Asuncion')::date-5,'Alquiler del local','Local',2200000,null),
     (v_user,(now() at time zone 'America/Asuncion')::date-8,'Productos de cuidado','Insumos',540000,null),
     (v_user,(now() at time zone 'America/Asuncion')::date-12,'Servicio de internet','Servicios',180000,null),

@@ -1629,10 +1629,55 @@ body.dark .login-screen,
 body.dark .locked-screen,
 body.dark .booking-page { background: var(--bg); }
 
+.cash-opening-panel,
+.cash-session-panel,
+.cash-history-panel { display: grid; gap: 1rem; }
+.cash-opening-panel { grid-template-columns: minmax(0,1fr) minmax(220px,320px) auto; align-items: end; }
+.cash-opening-panel h2,
+.cash-history-heading h2 { margin: .15rem 0 .4rem; }
+.cash-opening-panel .eyebrow,
+.cash-history-heading .eyebrow { margin: 0; }
+.cash-opening-panel .muted,
+.cash-history-heading .muted { margin: 0; line-height: 1.5; }
+.cash-session-heading,
+.cash-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.cash-session-heading h2 { margin: .15rem 0 .35rem; }
+.cash-session-heading .eyebrow { margin: 0; }
+.cash-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+.cash-actions .button { min-height: 48px; flex: 1 1 180px; }
+.cash-history-filters { align-items: end; }
+.cash-history-filters .field { flex: 1 1 160px; min-width: 0; }
+.cash-history-panel .table-wrap { max-width: 100%; }
+.cash-history-panel td small { display: block; margin-top: .2rem; color: var(--text-muted); }
+.cash-history-panel .status { display: inline-flex; white-space: nowrap; }
+.cash-closed-detail { border: 1px solid var(--border); }
+.cash-breakdown-panel { min-width: 0; }
+.cash-breakdown-panel > h3 { margin: 0 0 .65rem; }
+.cash-session-panel > .cash-breakdown-panel { padding-top: .5rem; }
+@media print {
+  .cash-opening-panel,
+  .cash-actions,
+  .cash-history-panel,
+  .cash-session-heading button { display: none !important; }
+  .cash-print-area { margin: 0; }
+  .cash-session-panel { gap: .5rem; padding: 0; border: 0; }
+  .cash-breakdown-list { max-height: none; overflow: visible; }
+}
+@media print and (max-width:100mm) {
+  .cash-print-area .cash-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .cash-print-area .cash-actions { display: none !important; }
+  .cash-print-area .cash-breakdown-grid { display: block; }
+}
+
 @media (max-width: 720px) {
   .main-area { padding: 1.2rem .9rem calc(88px + env(safe-area-inset-bottom)); }
   .panel { padding: 1rem; }
   .metric-card { padding: 1.25rem; }
   .onboarding-checklist, .booking-card { padding: 2rem 1.5rem 1.5rem; }
   .bottom-nav .nav-link.active { background: var(--color-canvas-white); }
+  .cash-opening-panel { grid-template-columns: minmax(0,1fr); align-items: stretch; }
+  .cash-session-heading,
+  .cash-history-heading { align-items: flex-start; flex-direction: column; }
+  .cash-actions .button { flex-basis: 100%; }
+  .cash-history-filters .field { flex-basis: 100%; }
 }

@@ -49,8 +49,8 @@ const NAV = [
   ['empleadas', '♙', 'Equipo'],
   ['configuracion', '⚙', 'Mi salón']
 ];
-const TABLES = ['clientas', 'servicios', 'turnos', 'turno_servicios', 'pagos', 'plantillas', 'gastos', 'productos', 'empleadas', 'solicitudes_reserva', 'horarios_especiales', 'fotos_clienta'];
-const MUTATING_ACTIONS = new Set(['new-client','edit-client','new-service','edit-service','new-appointment','new-client-appointment','edit-appointment','done-appointment','pay-appointment','new-expense','new-product','edit-product','new-employee','edit-employee','delete-row','delete-appointment','accept-request','reject-request','import-clients','save-templates','cancel-appointment','undo-payment','mark-thanks','save-special-date','delete-special-date']);
+const TABLES = ['clientas', 'servicios', 'turnos', 'turno_servicios', 'pagos', 'plantillas', 'gastos', 'productos', 'empleadas', 'solicitudes_reserva', 'horarios_especiales', 'fotos_clienta', 'cajas', 'caja_movimientos'];
+const MUTATING_ACTIONS = new Set(['new-client','edit-client','new-service','edit-service','new-appointment','new-client-appointment','edit-appointment','done-appointment','pay-appointment','new-expense','new-product','edit-product','new-employee','edit-employee','delete-row','delete-appointment','accept-request','reject-request','import-clients','save-templates','cancel-appointment','undo-payment','mark-thanks','save-special-date','delete-special-date','cash-open','cash-close','cash-movement-form']);
 const TEMPLATES = [
   ['recordatorio', 'Recordatorio de turno', 'Hola {nombre} 😊 Te recuerdo tu turno en {salon} el {fecha} a las {hora}. ¡Te esperamos!'],
   ['deuda', 'Aviso de saldo', 'Hola {nombre}, te escribimos de {salon}. Tu saldo pendiente es {deuda}. Cualquier consulta estamos a las órdenes.'],
@@ -85,7 +85,11 @@ const state = {
   onboardingSchemaMissing: false,
   googleReviewSchemaMissing: false,
   drag: null,
-  cashDate: dateInput(),
+  cashFrom: `${dateInput().slice(0, 7)}-01`,
+  cashTo: dateInput(),
+  cashDifferenceFilter: 'todos',
+  cashDetail: null,
+  cashLoadedRange: '',
   cashLoading: false,
   cashData: null,
   cashError: '',
@@ -340,7 +344,7 @@ async function loadLockedExportData() {
   if (state.exportLoaded) return;
   if (!state.exportLoading) {
     const ownerId = state.client?.id;
-    state.exportLoading = loadTables(['clientas','turnos','turno_servicios','pagos','gastos']).then(data => {
+    state.exportLoading = loadTables(['clientas','turnos','turno_servicios','pagos','gastos','cajas','caja_movimientos']).then(data => {
       if (state.client?.id === ownerId && state.locked) {
         state.data = { ...state.data, ...data };
         state.exportLoaded = true;
@@ -711,132 +715,132 @@ function renderReactivation() {
   return `${heading('Volver a conectar','Reactivación')}<div class="toolbar"><label class="field"><span class="tiny muted">Sin venir por</span><select id="reactivate-days"><option value="30" ${days===30?'selected':''}>30 días</option><option value="60" ${days===60?'selected':''}>60 días</option><option value="90" ${days===90?'selected':''}>90 días</option></select></label></div>${table(['Clienta','Teléfono','Última visita','Saldo',''],rows)}`;
 }
 
-function summarizeCashClose(cash) {
-  const date = cash.date;
-  const appointments = Array.isArray(cash.appointments) ? cash.appointments : [];
-  const payments = Array.isArray(cash.payments) ? cash.payments : [];
-  const servicePayments = Array.isArray(cash.servicePayments) ? cash.servicePayments : payments;
-  const expenses = Array.isArray(cash.expenses) ? cash.expenses : [];
-  const completed = appointments.filter(appointment => appointment.estado === 'hecho');
-  const paymentTotals = new Map();
-  for (const payment of servicePayments) {
-    paymentTotals.set(payment.turno_id, (paymentTotals.get(payment.turno_id) || 0) + Number(payment.monto_gs || 0));
-  }
-  const methods = ['Efectivo', 'Transferencia', 'Tigo Money'];
-  const byMethod = Object.fromEntries(methods.map(method => [method,
-    payments.filter(payment => payment.medio === method).reduce((sum, payment) => sum + Number(payment.monto_gs || 0), 0)
-  ]));
-  const otherPayments = payments.filter(payment => !methods.includes(payment.medio) && payment.medio !== 'Deuda')
-    .reduce((sum, payment) => sum + Number(payment.monto_gs || 0), 0);
-  const debtGenerated = completed.reduce((sum, appointment) =>
-    sum + Math.max(0, Number(appointment.precio_cierre_gs ?? appointment.precio_gs ?? 0) - (paymentTotals.get(appointment.id) || 0)), 0);
-  const debtPaid = payments.filter(payment => {
-    const related = Array.isArray(payment.turno) ? payment.turno[0] : payment.turno;
-    return Boolean(related?.fecha && related.fecha < date);
-  }).reduce((sum, payment) => sum + Number(payment.monto_gs || 0), 0);
-  const expensesTotal = expenses.reduce((sum, expense) => sum + Number(expense.monto_gs || 0), 0);
-  const collected = Object.values(byMethod).reduce((sum, amount) => sum + amount, 0) + otherPayments;
-  const services = new Map();
-  const employees = new Map();
-  for (const appointment of completed) {
-    const lines=(cash.turnoServices||[]).filter(line=>line.turno_id===appointment.id);
-    const items=lines.length?lines.map(line=>({id:line.servicio_id||line.servicio_nombre,nombre:line.servicio_nombre,precio_gs:Number(line.precio_gs||0)})):appointmentServices(appointment);
-    const allocated=allocateServiceAmount(Number(appointment.precio_cierre_gs??appointment.precio_gs??0),items);
-    for(const item of allocated){
-      const serviceId=item.service.id||item.service.nombre||'sin-servicio';
-      const service=services.get(serviceId)||{name:item.service.nombre||'Servicio',count:0,total:0};
-      service.count+=1; service.total+=item.amount; services.set(serviceId,service);
-    }
-
-    if (appointment.empleada_id) {
-      const employee = employeeById(appointment.empleada_id);
-      const commissionRate = Number(appointment.comision_pct_aplicada ?? employee?.comision_pct ?? 0);
-      const commission = Math.round(Number(appointment.precio_cierre_gs ?? appointment.precio_gs ?? 0) * commissionRate / 100);
-      const employeeSummary = employees.get(appointment.empleada_id) || { name: employee?.nombre || 'Empleada', total: 0, count: 0 };
-      employeeSummary.total += commission;
-      employeeSummary.count += 1;
-      employees.set(appointment.empleada_id, employeeSummary);
-    }
-  }
-  return { date, appointments, completed, payments, expenses, byMethod, otherPayments, debtGenerated, debtPaid, expensesTotal, collected, net: collected - expensesTotal, services, employees };
+function cashDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('es-PY', {
+    timeZone: 'America/Asuncion', dateStyle: 'medium', timeStyle: 'short'
+  }).format(date);
 }
 
-function renderCashClose() {
-  const cash = state.cashData;
-  const date = state.cashDate;
-  if (state.cashError) return `${heading('Cierre de caja', 'Control diario')}<div class="toolbar"><label class="field"><span class="tiny muted">Fecha del cierre</span><input id="cash-date" type="date" value="${e(date)}"></label></div><section class="panel" role="alert"><p>${e(state.cashError)}</p><button class="button primary" data-action="refresh-cash">Reintentar</button></section>`;
-  if (!cash) return `${heading('Cierre de caja', 'Control diario')}<div class="toolbar"><label class="field"><span class="tiny muted">Fecha del cierre</span><input id="cash-date" type="date" value="${e(date)}"></label><span class="muted" role="status">${state.cashLoading ? 'Cargando movimientos…' : 'Seleccioná un día para consultar los movimientos.'}</span></div>`;
+function cashMethodRows(methods, emptyText) {
+  const entries = Object.entries(methods || {}).sort(([a], [b]) => a.localeCompare(b, 'es'));
+  return entries.map(([method, amount]) => `<div class="cash-breakdown-row"><strong>${e(method)}</strong><strong class="cash-breakdown-amount">${money(amount)}</strong></div>`).join('')
+    || empty('Sin movimientos', emptyText);
+}
 
-  const summary = summarizeCashClose(cash);
-  const serviceRows = [...summary.services.values()]
-    .sort((a, b) => a.name.localeCompare(b.name, 'es'))
-    .map(item => `<div class="cash-breakdown-row"><div><strong>${e(item.name)}</strong><small>${item.count} ${item.count === 1 ? 'turno' : 'turnos'}</small></div><strong class="cash-breakdown-amount">${money(item.total)}</strong></div>`).join('')
-    || empty('Sin servicios', 'No hay turnos realizados en esta fecha.');
-  const employeeRows = [...summary.employees.values()]
-    .sort((a, b) => a.name.localeCompare(b.name, 'es'))
-    .map(item => `<div class="cash-breakdown-row"><div><strong>${e(item.name)}</strong><small>${item.count} ${item.count === 1 ? 'turno' : 'turnos'}</small></div><strong class="cash-breakdown-amount">${money(item.total)}</strong></div>`).join('')
-    || empty('Sin comisiones', 'No hay turnos realizados con empleada asignada en esta fecha.');
-  const expenseRows = summary.expenses
-    .map(item => `<div class="cash-breakdown-row"><div><strong>${e(item.concepto)}</strong><small>${e(item.categoria || 'Gasto del día')}</small></div><strong class="cash-breakdown-amount">${money(item.monto_gs)}</strong></div>`).join('')
-    || empty('Sin gastos', 'No hay gastos registrados en esta fecha.');
-  const otherMetric = summary.otherPayments ? metric('Otros cobros', money(summary.otherPayments), '') : '';
+function cashMovementRows(movements) {
+  return (movements || []).map(item => {
+    const sign = item.tipo === 'entrada' ? '+' : '−';
+    const source = item.pago_id ? 'Cobro en efectivo' : item.gasto_id ? 'Gasto pagado en efectivo' : 'Movimiento manual';
+    return `<div class="cash-breakdown-row"><div><strong>${e(item.concepto)}</strong><small>${e(source)} · ${e(item.categoria)} · ${e(cashDateTime(item.created_at))}${item.motivo ? ` · Motivo: ${e(item.motivo)}` : ''}</small></div><strong class="cash-breakdown-amount">${sign} ${money(item.monto_gs)}</strong></div>`;
+  }).join('') || empty('Sin movimientos', 'Los movimientos de esta caja aparecerán acá.');
+}
 
-  return `<div class="cash-print-area">${heading('Cierre de caja', 'Control diario', `<div class="button-group"><button class="button soft" data-action="cash-print">Imprimir</button><button class="button ghost" data-action="cash-whatsapp">Enviar por WhatsApp</button></div>`)}
-    <div class="toolbar no-print"><label class="field"><span class="tiny muted">Fecha del cierre</span><input id="cash-date" type="date" value="${e(summary.date)}"></label><span class="muted">${summary.completed.length} ${summary.completed.length === 1 ? 'turno realizado' : 'turnos realizados'}</span></div>
-    <h2 class="cash-date-title">${e(datePY(summary.date))} · ${e(salonName())}</h2>
-    <div class="metrics-grid cash-metrics">${metric('Efectivo', money(summary.byMethod.Efectivo), '')}${metric('Transferencia', money(summary.byMethod.Transferencia), '')}${metric('Tigo Money', money(summary.byMethod['Tigo Money']), '')}${otherMetric}${metric('Deuda generada', money(summary.debtGenerated), '')}${metric('Abonos de deuda', money(summary.debtPaid), '')}${metric('Gastos', money(summary.expensesTotal), '')}${metric('Neto', money(summary.net), 'Cobrado − gastos')}</div>
-    <div class="content-grid cash-breakdown-grid"><section class="panel cash-breakdown-panel"><h2>Servicios realizados</h2><div class="cash-breakdown-list">${serviceRows}</div></section><section class="panel cash-breakdown-panel"><h2>Comisiones por empleada</h2><div class="cash-breakdown-list">${employeeRows}</div></section><section class="panel cash-breakdown-panel"><h2>Gastos del día</h2><div class="cash-breakdown-list">${expenseRows}</div></section></div>
+function cashMetrics(box, totals, { closed = false } = {}) {
+  const payments = totals?.pagos_por_medio || {};
+  const expenses = totals?.gastos_por_medio || {};
+  const diff = Number(box?.diferencia_gs ?? totals?.diferencia_gs ?? 0);
+  const result = diff > 0 ? 'Sobrante' : diff < 0 ? 'Faltante' : 'Sin diferencia';
+  return `<div class="metrics-grid cash-metrics">
+    ${metric('Efectivo inicial', money(box?.monto_inicial_gs || 0), '')}
+    ${metric('Cobros en efectivo', money(totals?.cobros_efectivo_gs || 0), '')}
+    ${metric('Entradas manuales', money(totals?.entradas_manuales_gs || 0), '')}
+    ${metric('Salidas manuales', money(totals?.salidas_manuales_gs || 0), '')}
+    ${metric('Gastos en efectivo', money(totals?.gastos_efectivo_gs || 0), '')}
+    ${metric('Transferencias', money(payments.Transferencia || 0), 'No suman al efectivo físico')}
+    ${metric('Tigo Money', money(payments['Tigo Money'] || 0), 'No suma al efectivo físico')}
+    ${metric('Otros medios', money(Object.entries(payments).filter(([name]) => !['Efectivo','Transferencia','Tigo Money'].includes(name)).reduce((sum, [, amount]) => sum + Number(amount || 0), 0)), 'No suman al efectivo físico')}
+    ${metric(closed ? 'Efectivo esperado' : 'Efectivo esperado ahora', money(box?.efectivo_esperado_gs ?? totals?.efectivo_esperado_gs ?? 0), 'Inicial + cobros + entradas − salidas − gastos')}
+    ${closed ? `${metric('Efectivo contado', money(box?.efectivo_contado_gs || 0), '')}${metric(result, `${diff > 0 ? '+' : ''}${money(diff)}`, 'Contado − esperado')}` : ''}
+  </div>
+  <div class="content-grid cash-breakdown-grid">
+    <section class="panel cash-breakdown-panel"><h3>Pagos por medio</h3><div class="cash-breakdown-list">${cashMethodRows(payments, 'Los pagos asociados a esta caja aparecerán acá.')}</div></section>
+    <section class="panel cash-breakdown-panel"><h3>Gastos por medio</h3><div class="cash-breakdown-list">${cashMethodRows(expenses, 'Los gastos asociados a esta caja aparecerán acá.')}</div></section>
   </div>`;
 }
 
-async function loadCashClose(date, force = false) {
-  if (!date || (state.cashLoading && !force)) return;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    state.cashError = 'Seleccioná una fecha válida para el cierre.';
+function renderCashClose() {
+  if (state.cashError) return `${heading('Cierre de caja', 'Efectivo del salón')}<section class="panel" role="alert"><p>${e(state.cashError)}</p><button class="button primary" data-action="refresh-cash">Reintentar</button></section>`;
+  if (!state.cashData) return `${heading('Cierre de caja', 'Efectivo del salón')}<section class="panel" role="status">${state.cashLoading ? 'Cargando caja…' : 'Seleccioná Caja para cargar los datos.'}</section>`;
+
+  const active = state.cashData.caja_abierta;
+  const detail = state.cashDetail;
+  const detailBox = detail?.caja;
+  const detailSummary = detailBox?.snapshot || {};
+  const history = (state.cashData.historial || []).filter(box => {
+    const diff = Number(box.diferencia_gs || 0);
+    if (state.cashDifferenceFilter === 'sobrante') return diff > 0;
+    if (state.cashDifferenceFilter === 'faltante') return diff < 0;
+    if (state.cashDifferenceFilter === 'sin_diferencia') return diff === 0;
+    if (state.cashDifferenceFilter === 'con_diferencia') return diff !== 0;
+    return true;
+  });
+  const historyRows = history.map(box => {
+    const diff = Number(box.diferencia_gs || 0);
+    const label = diff > 0 ? 'Sobrante' : diff < 0 ? 'Faltante' : 'Sin diferencia';
+    return `<tr><td>${e(datePY(box.fecha))}<small>${e(cashDateTime(box.cerrada_at))}</small></td><td>${money(box.efectivo_esperado_gs)}</td><td>${money(box.efectivo_contado_gs)}</td><td><span class="status ${diff ? 'pendiente' : 'hecho'}">${e(label)} · ${diff > 0 ? '+' : ''}${money(diff)}</span></td><td><button class="small-button primary" data-action="cash-detail" data-cash-id="${e(box.id)}">Ver cierre</button></td></tr>`;
+  }).join('') || `<tr><td colspan="5">${empty('Sin cierres', 'No hay cajas cerradas en el rango seleccionado.')}</td></tr>`;
+
+  const opening = active ? '' : `<section class="panel cash-opening-panel">
+    <div><p class="eyebrow">Nueva sesión</p><h2>Abrir caja</h2><p class="muted">La fecha y hora se registran desde el servidor en America/Asuncion con tu usuaria.</p></div>
+    <label class="field"><span>Monto inicial en efectivo (Gs.)</span><input id="cash-opening-amount" type="number" min="0" step="1" inputmode="numeric" value="0" required></label>
+    <button class="button primary" data-action="cash-open">Abrir caja</button>
+  </section>`;
+
+  const activeView = active ? `<section class="panel cash-session-panel">
+    <div class="cash-session-heading"><div><p class="eyebrow">Caja abierta</p><h2>${e(datePY(active.fecha))} · ${e(salonName())}</h2><p class="muted">Abierta ${e(cashDateTime(active.abierta_at))} · por tu cuenta</p></div><span class="status pendiente">En curso</span></div>
+    ${cashMetrics(active, active.totales_actuales)}
+    <div class="cash-actions no-print"><button class="button soft" data-action="cash-movement-form" data-cash-type="entrada">Registrar entrada</button><button class="button ghost" data-action="cash-movement-form" data-cash-type="salida">Registrar salida</button><button class="button primary" data-action="cash-close">Cerrar caja</button><button class="button ghost" data-action="cash-print">Imprimir A4 / 80 mm</button><button class="button ghost" data-action="cash-whatsapp">Enviar por WhatsApp</button></div>
+    <section class="cash-breakdown-panel"><h3>Movimientos de efectivo</h3><div class="cash-breakdown-list">${cashMovementRows(state.cashData.movimientos)}</div></section>
+  </section>` : '';
+
+  const detailView = detailBox ? `<section class="panel cash-session-panel cash-closed-detail">
+    <div class="cash-session-heading"><div><p class="eyebrow">Cierre guardado · solo lectura</p><h2>${e(datePY(detailBox.fecha))} · ${e(salonName())}</h2><p class="muted">Abierta ${e(cashDateTime(detailBox.abierta_at))} · cerrada ${e(cashDateTime(detailBox.cerrada_at))}</p></div><button class="small-button" data-action="cash-detail-clear">Cerrar detalle</button></div>
+    ${cashMetrics(detailBox, detailSummary, { closed: true })}
+    <div class="cash-actions no-print"><button class="button ghost" data-action="cash-print">Imprimir A4 / 80 mm</button><button class="button ghost" data-action="cash-whatsapp">Enviar por WhatsApp</button></div>
+    <section class="cash-breakdown-panel"><h3>Movimientos de efectivo</h3><div class="cash-breakdown-list">${cashMovementRows(detail.movimientos)}</div></section>
+  </section>` : '';
+
+  return `${heading('Cierre de caja', 'Sesiones, efectivo y diferencias')}
+    ${opening}
+    <div class="cash-print-area">${activeView}${detailView}</div>
+    <section class="panel cash-history-panel">
+      <div class="cash-history-heading"><div><p class="eyebrow">Archivo</p><h2>Historial de cajas</h2></div><p class="muted">Los cierres guardados no se modifican. Para corregir efectivo, registrá un ajuste con motivo en la caja abierta.</p></div>
+      <div class="toolbar cash-history-filters"><label class="field"><span>Desde</span><input id="cash-from" type="date" value="${e(state.cashFrom)}"></label><label class="field"><span>Hasta</span><input id="cash-to" type="date" value="${e(state.cashTo)}"></label><label class="field"><span>Diferencia</span><select id="cash-difference-filter"><option value="todos" ${state.cashDifferenceFilter==='todos'?'selected':''}>Todas</option><option value="con_diferencia" ${state.cashDifferenceFilter==='con_diferencia'?'selected':''}>Con diferencia</option><option value="sobrante" ${state.cashDifferenceFilter==='sobrante'?'selected':''}>Sobrantes</option><option value="faltante" ${state.cashDifferenceFilter==='faltante'?'selected':''}>Faltantes</option><option value="sin_diferencia" ${state.cashDifferenceFilter==='sin_diferencia'?'selected':''}>Sin diferencia</option></select></label></div>
+      ${table(['Fecha','Esperado','Contado','Diferencia',''],historyRows)}
+    </section>`;
+}
+
+async function loadCashClose(force = false) {
+  if (state.cashLoading && !force) return;
+  const from = state.cashFrom;
+  const to = state.cashTo;
+  if ((from && !/^\d{4}-\d{2}-\d{2}$/.test(from)) || (to && !/^\d{4}-\d{2}-\d{2}$/.test(to)) || (from && to && from > to)) {
+    state.cashError = 'Elegí un rango válido para consultar el historial.';
     if (state.view === 'caja') applyView();
     return;
   }
   const requestId = ++state.cashLoadId;
+  const range = `${from || ''}:${to || ''}`;
   state.cashLoading = true;
   state.cashError = '';
   state.cashData = null;
   if (state.view === 'caja') applyView();
   try {
-    const [appointmentsResult, paymentsResult, expensesResult] = await Promise.all([
-      supabase.from('turnos').select('*').eq('fecha', date).order('hora'),
-      supabase.from('pagos')
-        .select('id,turno_id,clienta_id,fecha,monto_gs,medio,nota,turno:turnos!pagos_turno_fk(fecha)')
-        .eq('fecha', date),
-      supabase.from('gastos').select('id,fecha,concepto,categoria,monto_gs').eq('fecha', date)
-    ]);
-    for (const result of [appointmentsResult, paymentsResult, expensesResult]) {
-      if (result.error) throw result.error;
-    }
-    const appointments = appointmentsResult.data || [];
-    const completedIds = appointments.filter(appointment => appointment.estado === 'hecho').map(appointment => appointment.id);
-    let servicePayments = [], turnoServices = [];
-    if (completedIds.length) {
-      const [servicePaymentsResult,turnoServicesResult] = await Promise.all([
-        supabase.from('pagos').select('turno_id,monto_gs').in('turno_id', completedIds),
-        supabase.from('turno_servicios').select('turno_id,servicio_id,servicio_nombre,precio_gs,duracion_min,orden').in('turno_id', completedIds).order('orden')
-      ]);
-      if (servicePaymentsResult.error) throw servicePaymentsResult.error;
-      if (turnoServicesResult.error) throw turnoServicesResult.error;
-      servicePayments = servicePaymentsResult.data || [];
-      turnoServices = turnoServicesResult.data || [];
-    }
+    const { data, error } = await supabase.rpc('caja_datos', { p_desde: from || null, p_hasta: to || null });
+    if (error) throw error;
+    if (!data || !Array.isArray(data.historial) || !Array.isArray(data.movimientos)) throw new Error('La respuesta de caja está incompleta.');
     if (requestId === state.cashLoadId) {
-      state.cashData = {
-        date,
-        appointments,
-        turnoServices,
-        payments: paymentsResult.data || [],
-        servicePayments,
-        expenses: expensesResult.data || []
-      };
+      state.cashData = data;
+      state.cashLoadedRange = range;
     }
   } catch (error) {
-    if (requestId === state.cashLoadId) state.cashError = requestError(error);
+    if (requestId === state.cashLoadId) {
+      state.cashError = requestError(error);
+      state.cashLoadedRange = '';
+    }
   } finally {
     if (requestId === state.cashLoadId) {
       state.cashLoading = false;
@@ -846,19 +850,21 @@ async function loadCashClose(date, force = false) {
 }
 
 function shareCashClose() {
-  if (!state.cashData) return toast('Esperá a que cargue el cierre.', 'error');
-  const summary = summarizeCashClose(state.cashData);
+  const box = state.cashDetail?.caja || state.cashData?.caja_abierta;
+  if (!box) return toast('Seleccioná una caja abierta o un cierre del historial.', 'error');
+  const summary = box.snapshot || box.totales_actuales || {};
+  const payments = Object.entries(summary.pagos_por_medio || {}).sort(([a], [b]) => a.localeCompare(b, 'es'));
+  const expenses = Object.entries(summary.gastos_por_medio || {}).sort(([a], [b]) => a.localeCompare(b, 'es'));
+  const diff = Number(box.diferencia_gs ?? summary.diferencia_gs ?? 0);
   const lines = [
-    `Cierre de caja · ${datePY(summary.date)} · ${salonName()}`,
-    `Turnos hechos: ${summary.completed.length}`,
-    `Efectivo: ${money(summary.byMethod.Efectivo)}`,
-    `Transferencia: ${money(summary.byMethod.Transferencia)}`,
-    `Tigo Money: ${money(summary.byMethod['Tigo Money'])}`,
-    ...(summary.otherPayments ? [`Otros cobros: ${money(summary.otherPayments)}`] : []),
-    `Deuda generada: ${money(summary.debtGenerated)}`,
-    `Abonos de deuda: ${money(summary.debtPaid)}`,
-    `Gastos: ${money(summary.expensesTotal)}`,
-    `Neto cobrado − gastos: ${money(summary.net)}`
+    `Caja · ${datePY(box.fecha)} · ${salonName()}`,
+    `Apertura: ${cashDateTime(box.abierta_at)}`,
+    ...(box.cerrada_at ? [`Cierre: ${cashDateTime(box.cerrada_at)}`] : []),
+    `Efectivo inicial: ${money(box.monto_inicial_gs)}`,
+    ...payments.map(([method, amount]) => `Cobros · ${method}: ${money(amount)}`),
+    ...expenses.map(([method, amount]) => `Gastos · ${method}: ${money(amount)}`),
+    `Efectivo esperado: ${money(box.efectivo_esperado_gs ?? summary.efectivo_esperado_gs)}`,
+    ...(box.efectivo_contado_gs != null ? [`Efectivo contado: ${money(box.efectivo_contado_gs)}`, `Diferencia: ${diff > 0 ? '+' : ''}${money(diff)}`] : [])
   ];
   window.open(waLink('', lines.join('\n')), '_blank', 'noopener');
 }
@@ -942,10 +948,10 @@ function renderReports() {
 }
 
 function renderExpenses() {
-  const rows = [...state.data.gastos].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(x => `<tr><td>${datePY(x.fecha)}</td><td>${e(x.concepto)}</td><td>${e(x.categoria||'—')}</td><td>${money(x.monto_gs)}</td><td><button class="small-button danger" data-action="delete-row" data-table="gastos" data-id="${e(x.id)}">Borrar</button></td></tr>`);
+  const rows = [...state.data.gastos].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(x => `<tr><td>${datePY(x.fecha)}</td><td>${e(x.concepto)}</td><td>${e(x.categoria||'—')}</td><td>${e(x.medio_pago||'Efectivo')}</td><td>${money(x.monto_gs)}</td><td><button class="small-button danger" data-action="delete-row" data-table="gastos" data-id="${e(x.id)}">Borrar</button></td></tr>`);
   const month = dateInput().slice(0, 7),
     total = state.data.gastos.filter(x => x.fecha.startsWith(month)).reduce((n, x) => n + Number(x.monto_gs), 0);
-  return `${heading('Gastos','Control del salón',`<button class="button primary" data-action="new-expense">＋ Registrar gasto</button>`)}<div class="metrics-grid">${metric('Gastos este mes',money(total),'Registrados en el mes actual')}</div>${table(['Fecha','Concepto','Categoría','Monto',''],rows)}`;
+  return `${heading('Gastos','Control del salón',`<button class="button primary" data-action="new-expense">＋ Registrar gasto</button>`)}<div class="metrics-grid">${metric('Gastos este mes',money(total),'Registrados en el mes actual')}</div>${table(['Fecha','Concepto','Categoría','Medio','Monto',''],rows)}`;
 }
 
 function renderProducts() {
@@ -1364,11 +1370,21 @@ function bindView() {
     localStorage.setItem('reactivate-days', ev.target.value);
     applyView();
   });
-  $('#cash-date')?.addEventListener('change', ev => {
-    state.cashDate = ev.target.value || dateInput();
-    loadCashClose(state.cashDate,true).catch(error => toast(requestError(error), 'error'));
+  const cashRangeChanged = () => {
+    state.cashFrom = $('#cash-from')?.value || '';
+    state.cashTo = $('#cash-to')?.value || '';
+    state.cashDetail = null;
+    loadCashClose(true).catch(error => toast(requestError(error), 'error'));
+  };
+  $('#cash-from')?.addEventListener('change', cashRangeChanged);
+  $('#cash-to')?.addEventListener('change', cashRangeChanged);
+  $('#cash-difference-filter')?.addEventListener('change', ev => {
+    state.cashDifferenceFilter = ev.target.value;
+    applyView();
   });
-  if (state.view === 'caja' && state.cashData?.date !== state.cashDate && !state.cashLoading && !state.cashError) loadCashClose(state.cashDate).catch(error => toast(requestError(error), 'error'));
+  if (state.view === 'caja' && state.cashLoadedRange !== `${state.cashFrom || ''}:${state.cashTo || ''}` && !state.cashLoading && !state.cashError) {
+    loadCashClose().catch(error => toast(requestError(error), 'error'));
+  }
   if (state.view === 'reportes') {
     drawChart(state.chart?.labels || [], state.chart?.values || []);
     addEventListener('resize', () => drawChart(state.chart?.labels || [], state.chart?.values || []), {
@@ -1607,7 +1623,7 @@ function paymentForm(item) {
   const c = clientById(item.clienta_id);
   if(item.estado==='hecho'&&state.data.pagos.some(p=>p.turno_id===item.id)) return toast('Este turno ya tiene un pago. Abrí su detalle para ver o anular el cobro.');
   state.quickThanks=false;
-  showModal('Cobro rápido', `<form id="quick-payment-form" class="form-grid"><p class="wide muted">${e(c?.nombre||'Clienta')} · ${e(appointmentServiceLabel(item))} · ${datePY(item.fecha)} ${timePY(item.hora)}</p>${formField('Monto recibido (Gs.)','monto_gs',item.precio_cierre_gs??item.precio_gs,'number',{required:true,min:0,max:item.precio_cierre_gs??item.precio_gs})}${formField('Fecha de pago','fecha',dateInput(),'date',{required:true})}<label class="check-field wide"><input name="agradecer" type="checkbox">Enviar agradecimiento por WhatsApp</label><div class="cash-methods wide"><button type="button" class="button primary" data-action="cash-medium" data-cash-medium="Efectivo" data-turn-id="${e(item.id)}">Efectivo</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Transferencia" data-turn-id="${e(item.id)}">Transferencia</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Tigo Money" data-turn-id="${e(item.id)}">Tigo Money</button><button type="button" class="button ghost" data-action="cash-medium" data-cash-medium="Otro" data-turn-id="${e(item.id)}">Otro medio</button></div><div id="other-medium-fields" class="wide" hidden>${formField('Especificá cómo pagó','otro_detalle','','text',{maxlength:60})}<button type="button" class="button primary" data-action="cash-other-confirm" data-cash-medium="Otro" data-turn-id="${e(item.id)}">Registrar pago</button></div><p class="wide muted tiny">Si abonás menos del precio, la diferencia queda como saldo pendiente en la ficha de la clienta.</p></form>`, '');
+  showModal('Cobro rápido', `<form id="quick-payment-form" class="form-grid"><p class="wide muted">${e(c?.nombre||'Clienta')} · ${e(appointmentServiceLabel(item))} · ${datePY(item.fecha)} ${timePY(item.hora)}</p>${formField('Monto recibido (Gs.)','monto_gs',item.precio_cierre_gs??item.precio_gs,'number',{required:true,min:0,max:item.precio_cierre_gs??item.precio_gs})}${formField('Fecha de pago','fecha',dateInput(),'date',{required:true})}<label class="check-field wide"><input name="agradecer" type="checkbox">Enviar agradecimiento por WhatsApp</label><div class="cash-methods wide"><button type="button" class="button primary" data-action="cash-medium" data-cash-medium="Efectivo" data-turn-id="${e(item.id)}">Efectivo</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Transferencia" data-turn-id="${e(item.id)}">Transferencia</button><button type="button" class="button soft" data-action="cash-medium" data-cash-medium="Tigo Money" data-turn-id="${e(item.id)}">Tigo Money</button><button type="button" class="button ghost" data-action="cash-medium" data-cash-medium="Otro" data-turn-id="${e(item.id)}">Otro medio</button></div><div id="other-medium-fields" class="wide" hidden>${formField('Especificá cómo pagó','otro_detalle','','text',{maxlength:60})}<button type="button" class="button primary" data-action="cash-other-confirm" data-cash-medium="Otro" data-turn-id="${e(item.id)}">Registrar pago</button></div><p class="wide muted tiny">Para cobrar en efectivo, abrí la caja desde el menú. Transferencia y Tigo Money no requieren efectivo inicial.</p><p class="wide muted tiny">Si abonás menos del precio, la diferencia queda como saldo pendiente en la ficha de la clienta.</p></form>`, '');
   $('#quick-payment-form').addEventListener('submit',ev=>ev.preventDefault());
   $('#modal-submit')?.remove(); $('#modal-footer').innerHTML='<button class="button ghost" type="button" data-modal-close>Cancelar</button>';
 }
@@ -1640,21 +1656,22 @@ async function completeQuickPayment(button) {
 }
 
 function expenseForm() {
-  showModal('Registrar gasto', `<form id="entity-form" class="form-grid">${formField('Fecha','fecha',dateInput(),'date',{required:true})}${formField('Concepto','concepto','','text',{required:true,maxlength:120})}${formField('Categoría','categoria','','text',{maxlength:60})}${formField('Monto (Gs.)','monto_gs','','number',{required:true,min:1})}${formField('Nota','nota','','textarea',{wide:true,maxlength:500})}</form>`);
+  showModal('Registrar gasto', `<form id="entity-form" class="form-grid">${formField('Fecha','fecha',dateInput(),'date',{required:true})}${formField('Concepto','concepto','','text',{required:true,maxlength:120})}${formField('Categoría','categoria','','text',{maxlength:60})}${formField('Monto (Gs.)','monto_gs','','number',{required:true,min:1})}<label class="field"><span>Medio de pago</span><select name="medio_pago" required><option value="Efectivo">Efectivo</option><option value="Transferencia">Transferencia</option><option value="Tigo Money">Tigo Money</option><option value="Otro">Otro</option></select></label>${formField('Nota','nota','','textarea',{wide:true,maxlength:500})}</form>`);
   modalSubmit(async form => {
-    const r = formObject(form),
-      {
-        error
-      } = await supabase.from('gastos').insert({
-        fecha: r.fecha,
-        concepto: r.concepto.trim(),
-        categoria: r.categoria.trim() || null,
-        monto_gs: Number(r.monto_gs),
-        nota: r.nota.trim() || null
-      });
+    const r = formObject(form);
+    if (!Number.isSafeInteger(Number(r.monto_gs)) || Number(r.monto_gs) <= 0) throw new Error('El monto debe ser un número entero mayor que cero.');
+    const { error } = await supabase.rpc('registrar_gasto', {
+      p_fecha: r.fecha,
+      p_concepto: r.concepto.trim(),
+      p_categoria: r.categoria.trim() || null,
+      p_monto_gs: Number(r.monto_gs),
+      p_medio_pago: r.medio_pago,
+      p_nota: r.nota.trim() || null
+    });
     if (error) throw error;
     toast('Gasto registrado');
     await refresh();
+    if (state.view === 'caja') await loadCashClose(true);
   });
 }
 
@@ -1739,7 +1756,12 @@ async function handleAction(ev) {
     if (action === 'quick-search-close') return $('#global-search-dialog').close();
     if (action === 'keyboard-help') { showModal('Atajos de teclado','<ul><li><kbd>n</kbd> Nuevo turno</li><li><kbd>/</kbd> o <kbd>Ctrl+K</kbd> Búsqueda global</li><li><kbd>?</kbd> Ver esta ayuda</li></ul>','Cerrar'); return; }
     if (action === 'global-search-result') return openSearchResult(b.dataset.kind, id);
-    if (action === 'refresh-cash') return loadCashClose(state.cashDate,true);
+    if (action === 'refresh-cash') return loadCashClose(true);
+    if (action === 'cash-open') return openCashSession(b);
+    if (action === 'cash-close') return cashCloseForm();
+    if (action === 'cash-movement-form') return cashMovementForm(b.dataset.cashType);
+    if (action === 'cash-detail') return showCashDetail(b.dataset.cashId);
+    if (action === 'cash-detail-clear') { state.cashDetail = null; return applyView(); }
     if (action === 'cash-print') return window.print();
     if (action === 'cash-whatsapp') return shareCashClose();
     if (action === 'fab-toggle') { const open=$('#quick-actions').classList.toggle('open'); b.setAttribute('aria-expanded',String(open)); return; }
@@ -1888,14 +1910,102 @@ async function deleteRow(table, id) {
       if (storageError) throw storageError;
     }
   }
-  const {
-    error
-  } = await supabase.from(table).delete().eq('id', id);
+  const result = table === 'gastos'
+    ? await supabase.rpc('eliminar_gasto', { p_gasto_id: id })
+    : await supabase.from(table).delete().eq('id', id);
+  const { error } = result;
   if (error) throw error;
   toast('Registro eliminado');
   await refresh();
   if (table === 'fotos_clienta' && state.detailsClient) return clientDetails(state.detailsClient);
 }
+
+async function openCashSession(button) {
+  const amount = Number($('#cash-opening-amount')?.value);
+  if (!Number.isSafeInteger(amount) || amount < 0) return toast('Ingresá un monto inicial entero de cero o más.', 'error');
+  setBusy(button, true, 'Abriendo…');
+  try {
+    const { error } = await supabase.rpc('abrir_caja', { p_monto_inicial_gs: amount });
+    if (error) throw error;
+    state.cashDetail = null;
+    await loadCashClose(true);
+    if (state.cashError) toast('La caja se abrió, pero no se pudo actualizar la pantalla. Tocá Reintentar.', 'error');
+    else toast('Caja abierta; la fecha y hora quedaron registradas.');
+  } finally {
+    setBusy(button, false);
+  }
+}
+
+function cashMovementForm(type) {
+  if (!requireEditable()) return;
+  const direction = type === 'entrada' ? 'entrada' : 'salida';
+  showModal(direction === 'entrada' ? 'Registrar entrada de efectivo' : 'Registrar salida de efectivo', `<form id="cash-movement-form" class="form-grid">
+    <p class="wide muted">Este movimiento se asociará a la caja abierta y actualizará el efectivo esperado.</p>
+    <input type="hidden" name="tipo" value="${direction}">
+    ${formField('Concepto','concepto','','text',{required:true,maxlength:120})}
+    ${fieldSelect('Categoría','categoria', [['retiro','Retiro'],['adelanto','Adelanto'],['cambio','Cambio'],['otros','Otros'],['ajuste','Ajuste por corrección']], 'otros', true)}
+    ${formField('Monto (Gs.)','monto_gs','','number',{required:true,min:1,step:1})}
+    <label id="cash-movement-reason-wrap" class="field wide" hidden><span>Motivo del ajuste</span><textarea name="motivo" maxlength="500"></textarea></label>
+  </form>`, 'Registrar movimiento');
+  const form = $('#cash-movement-form');
+  form.elements.categoria.addEventListener('change', () => {
+    const reason = $('#cash-movement-reason-wrap');
+    reason.hidden = form.elements.categoria.value !== 'ajuste';
+    form.elements.motivo.required = !reason.hidden;
+  });
+  modalSubmit(async submitted => {
+    const values = formObject(submitted);
+    const amount = Number(values.monto_gs);
+    if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error('El monto debe ser un número entero mayor que cero.');
+    const { error } = await supabase.rpc('registrar_movimiento_caja', {
+      p_tipo: values.tipo,
+      p_categoria: values.categoria,
+      p_concepto: values.concepto.trim(),
+      p_monto_gs: amount,
+      p_motivo: values.motivo?.trim() || null
+    });
+    if (error) throw error;
+    await loadCashClose(true);
+    if (state.cashError) toast('El movimiento se guardó, pero no se pudo actualizar la pantalla. Tocá Reintentar.', 'error');
+    else toast('Movimiento registrado en la caja abierta.');
+  });
+}
+
+function cashCloseForm() {
+  const box = state.cashData?.caja_abierta;
+  if (!box) return toast('No hay una caja abierta para cerrar.', 'error');
+  const expected = Number(box.totales_actuales?.efectivo_esperado_gs || 0);
+  showModal('Cerrar caja', `<form id="cash-close-form" class="form-grid">
+    <p class="wide muted">El cierre guarda una copia de los totales por medio de pago. Después no se puede editar.</p>
+    <div class="metric-card wide"><span class="metric-label">Efectivo esperado</span><strong class="metric-value">${money(expected)}</strong></div>
+    ${formField('Efectivo contado (Gs.)','efectivo_contado_gs',expected,'number',{required:true,min:0,step:1})}
+  </form>`, 'Confirmar cierre');
+  modalSubmit(async form => {
+    const amount = Number(form.elements.efectivo_contado_gs.value);
+    if (!Number.isSafeInteger(amount) || amount < 0) throw new Error('Ingresá el efectivo contado como número entero de cero o más.');
+    const { data, error } = await supabase.rpc('cerrar_caja', { p_efectivo_contado_gs: amount });
+    if (error) throw error;
+    state.cashDetail = null;
+    await loadCashClose(true);
+    const detail = await supabase.rpc('caja_detalle', { p_caja_id: data.id });
+    if (detail.error) throw detail.error;
+    state.cashDetail = detail.data;
+    state.cashData ||= { caja_abierta: null, movimientos: [], historial: [] };
+    state.cashError = '';
+    applyView();
+    const difference = Number(data.diferencia_gs || 0);
+    const status = difference > 0 ? `sobrante de ${money(difference)}` : difference < 0 ? `faltante de ${money(Math.abs(difference))}` : 'sin diferencia';
+    toast(`Caja cerrada con ${status}.`);
+  });
+}
+
+async function showCashDetail(id) {
+  const { data, error } = await supabase.rpc('caja_detalle', { p_caja_id: id });
+  if (error) throw error;
+  state.cashDetail = data;
+  applyView();
+}
+
 async function clientDetails(id) {
   const c = clientById(id);
   if (!c) return;
@@ -2089,7 +2199,7 @@ async function backupJSON() {
 }
 
 function backupCSV() {
-  for (const tableName of ['clientas', 'turnos', 'turno_servicios', 'pagos', 'gastos']) {
+  for (const tableName of ['clientas', 'turnos', 'turno_servicios', 'pagos', 'gastos', 'cajas', 'caja_movimientos']) {
     const rows = state.data[tableName] || [];
     const keys = [...new Set(rows.flatMap(row => Object.keys(row)))];
     const data = [keys.map(csvEscape).join(','), ...rows.map(row => keys.map(k => csvEscape(row[k])).join(','))].join('\r\n');
@@ -2160,6 +2270,7 @@ async function refresh() {
   await getProfile();
   await loadData();
   await completeOnboardingIfReady();
+  if (state.cashData) await loadCashClose(true);
   applyView();
   if (migrationWasMissing && !state.onboardingSchemaMissing && state.profile?.onboarding_estado === 'pendiente') openOnboarding();
 }
@@ -2174,7 +2285,7 @@ async function showBlocked() {
   $('#side-nav').replaceChildren();
   $('#bottom-nav').replaceChildren();
   for (const table of TABLES) {
-    if (!['clientas','turnos','pagos','gastos'].includes(table)) state.data[table] = [];
+    if (!['clientas','turnos','pagos','gastos','cajas','caja_movimientos'].includes(table)) state.data[table] = [];
   }
   state.detailsClient = null;
   if ($('#modal').open) $('#modal').close();
@@ -2197,7 +2308,7 @@ async function showBlocked() {
 async function exportBlockedData() {
   try {
     await loadLockedExportData();
-    const tableNames = ['clientas','turnos','pagos','gastos'];
+    const tableNames = ['clientas','turnos','turno_servicios','pagos','gastos','cajas','caja_movimientos'];
     const backup = Object.fromEntries(tableNames.map(name => [name, state.data[name] || []]));
     const records = tableNames.flatMap(tabla => backup[tabla].map(row => ({ tabla, ...row })));
     const columns = ['tabla', ...new Set(records.flatMap(row => Object.keys(row).filter(key => key !== 'tabla')))];
@@ -2206,7 +2317,7 @@ async function exportBlockedData() {
     const date = dateInput();
     downloadFile(`agendapora-${salonSlug()}-${date}.csv`, csv, 'text/csv;charset=utf-8');
     downloadFile(`agendapora-${salonSlug()}-${date}.json`, JSON.stringify({ respaldo: 'AgendaPorã', exportado_en: new Date().toISOString(), salon: salonName(), vence_el: state.profile?.vence_el || null, tablas: backup }, null, 2), 'application/json');
-    toast('Se descargaron el CSV y el JSON de clientas, turnos, pagos y gastos.');
+    toast('Se descargaron CSV y JSON con clientas, turnos, pagos, gastos y cajas.');
   } catch (error) {
     toast(`No se pudieron exportar los datos: ${requestError(error)}`, 'error');
   }
@@ -2271,6 +2382,7 @@ async function showApp(session) {
   state.profile = null;
   state.data = Object.fromEntries(TABLES.map(table => [table, []]));
   state.cashData=null; state.cashError=''; state.cashLoading=false; state.cashLoadId++;
+  state.cashFrom=`${dateInput().slice(0,7)}-01`; state.cashTo=dateInput(); state.cashDetail=null; state.cashLoadedRange='';
   $('#login-screen').classList.add('hidden');
   $('#password-screen').classList.add('hidden');
   $('#blocked-screen').classList.add('hidden');
@@ -2541,7 +2653,7 @@ async function init() {
         state.exportLoaded = false;
         state.exportLoading = null;
         state.data = Object.fromEntries(TABLES.map(table => [table, []]));
-        state.cashData=null; state.cashError=''; state.cashLoading=false; state.cashLoadId++;
+        state.cashData=null; state.cashError=''; state.cashLoading=false; state.cashLoadId++; state.cashDetail=null; state.cashLoadedRange='';
         state.passwordRecoverySession = null;
         passwordRecoveryActive = false;
         state.onboardingSchemaMissing = false;

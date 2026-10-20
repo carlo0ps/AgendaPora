@@ -40,6 +40,7 @@ declare
   v_productos_ok boolean := false;
   v_solicitudes_ok boolean := false;
   v_fotos_ok boolean := false;
+  v_caja_ok boolean := false;
   v_horarios_especiales_ok boolean := false;
   v_config_reservas_ok boolean := false;
   v_cantidad_clientas integer := 0;
@@ -140,6 +141,11 @@ begin
   select count(*)=4 into v_config_reservas_ok from information_schema.columns
   where table_schema='public' and table_name='perfiles'
     and column_name=any(array['intervalo_reservas_min','anticipacion_reserva_min','max_dias_reserva','buffer_reserva_min']::text[]);
+  select to_regclass('public.cajas') is not null and to_regclass('public.caja_movimientos') is not null
+    and exists(select 1 from information_schema.columns where table_schema='public' and table_name='pagos' and column_name='caja_id')
+    and exists(select 1 from information_schema.columns where table_schema='public' and table_name='gastos' and column_name='caja_id')
+    and exists(select 1 from information_schema.columns where table_schema='public' and table_name='gastos' and column_name='medio_pago')
+    into v_caja_ok;
 
   if not v_perfil_ok then raise notice 'Se omite la actualización del perfil: falta alguna columna requerida en public.perfiles.'; end if;
   if not v_clientas_ok then raise notice 'Se omite la carga de clientas: falta public.clientas o alguna columna requerida.'; end if;
@@ -154,6 +160,7 @@ begin
   if not v_fotos_ok then raise notice 'No existe public.fotos_clienta.user_id; no se cargan fotos en esta plantilla.'; end if;
   if not v_horarios_especiales_ok then raise notice 'Se omiten las fechas especiales: falta public.horarios_especiales o alguna columna requerida. Ejecutá migracion_16.sql.'; end if;
   if not v_config_reservas_ok then raise notice 'Se omiten los límites configurables de reserva: faltan columnas de migracion_16.sql.'; end if;
+  if not v_caja_ok then raise notice 'Se omite la sesión de caja ficticia: aplicá supabase/migracion_19.sql.'; end if;
 
   if v_turnos_ok then
     select exists(
@@ -169,12 +176,15 @@ begin
   end if;
 
   if v_reiniciar then
+    perform set_config('agendapora.seed_caja_reset','on',true);
     if v_fotos_ok then delete from public.fotos_clienta where user_id=v_user; end if;
+    if v_caja_ok then delete from public.caja_movimientos where user_id=v_user; end if;
     if v_pagos_ok then delete from public.pagos where user_id=v_user; end if;
     if v_turnos_ok then delete from public.turnos where user_id=v_user; end if;
     if v_solicitudes_ok then delete from public.solicitudes_reserva where user_id=v_user; end if;
     if v_horarios_especiales_ok then delete from public.horarios_especiales where user_id=v_user; end if;
     if v_gastos_ok then delete from public.gastos where user_id=v_user; end if;
+    if v_caja_ok then delete from public.cajas where user_id=v_user; end if;
     if v_productos_ok then delete from public.productos where user_id=v_user; end if;
     if v_empleadas_ok then delete from public.empleadas where user_id=v_user; end if;
     if v_plantillas_ok then delete from public.plantillas where user_id=v_user; end if;
@@ -203,6 +213,15 @@ begin
       google_review_url='https://example.test/resena',
       onboarding_estado='completado'
     where user_id=v_user;
+  end if;
+
+  if v_reiniciar and v_caja_ok then
+    insert into public.cajas(id,user_id,fecha,abierta_por,monto_inicial_gs)
+      values(md5(v_user::text||':caja:plantilla')::uuid,v_user,v_hoy,v_user,150000);
+    insert into public.caja_movimientos(id,user_id,caja_id,created_by,tipo,categoria,concepto,monto_gs)
+      values
+        (md5(v_user::text||':caja:plantilla:entrada')::uuid,v_user,md5(v_user::text||':caja:plantilla')::uuid,v_user,'entrada','cambio','Cambio inicial ficticio',30000),
+        (md5(v_user::text||':caja:plantilla:salida')::uuid,v_user,md5(v_user::text||':caja:plantilla')::uuid,v_user,'salida','retiro','Retiro de prueba ficticio',10000);
   end if;
   if v_perfil_ok and v_config_reservas_ok then
     update public.perfiles set intervalo_reservas_min=15,anticipacion_reserva_min=120,max_dias_reserva=60,buffer_reserva_min=15
@@ -356,7 +375,7 @@ begin
       where t.user_id=v_user and t.estado='hecho'
         and t.id in (select md5(v_user::text||':turno:'||g.i::text)::uuid from generate_series(1,38) as g(i))
     ), pagos_seed as (
-      select h.id as turno_id,h.clienta_id,h.fecha,
+    select h.id as turno_id,h.clienta_id,case when v_reiniciar and h.orden=1 then v_hoy else h.fecha end as fecha,
         case when h.clienta_id=md5(v_user::text||':clienta:1')::uuid then 25000
              when h.clienta_id=md5(v_user::text||':clienta:2')::uuid then 200000
              when h.clienta_id=md5(v_user::text||':clienta:3')::uuid then 390000
@@ -382,7 +401,7 @@ begin
 
   if v_gastos_ok then
     insert into public.gastos as actual(id,user_id,fecha,concepto,categoria,monto_gs,nota) values
-      (md5(v_user::text||':gasto:1')::uuid,v_user,v_hoy-1,'Alquiler del local','Alquiler',2300000,'Gasto ficticio de demostración.'),
+      (md5(v_user::text||':gasto:1')::uuid,v_user,v_hoy,'Alquiler del local','Alquiler',2300000,'Gasto ficticio de demostración.'),
       (md5(v_user::text||':gasto:2')::uuid,v_user,v_hoy-3,'Tintes y oxidantes','Insumos',465000,'Compra ficticia de coloración.'),
       (md5(v_user::text||':gasto:3')::uuid,v_user,v_hoy-5,'Internet del salón','Servicios',180000,null),
       (md5(v_user::text||':gasto:4')::uuid,v_user,v_hoy-7,'Electricidad','Servicios',290000,null),
