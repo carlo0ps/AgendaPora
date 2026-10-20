@@ -2113,7 +2113,7 @@ input[type="checkbox"], input[type="radio"], progress { accent-color: var(--prim
   .cash-page-view .cash-breakdown-amount { text-align:left; }
 }
 @media print and (min-width:100mm) {
-  @page { size:A4 portrait; margin:7mm 8mm; }
+  @page { size:A4 portrait; margin:5mm 8mm; }
   .cash-page-view .cash-print-area > .cash-session-panel { gap:8px !important; padding:9px !important; }
   .cash-page-view .cash-session-heading { padding-bottom:6px; }
   .cash-page-view .cash-session-heading h2 { margin:0 0 2px; font-size:14pt; line-height:1.15; }
@@ -2130,5 +2130,6 @@ input[type="checkbox"], input[type="radio"], progress { accent-color: var(--prim
   .cash-page-view .cash-breakdown-row { gap:4px; padding:3px 5px; font-size:7.5pt; line-height:1.15; }
   .cash-page-view .cash-breakdown-row small { margin-top:1px; font-size:6.5pt; line-height:1.1; }
   .cash-page-view .cash-breakdown-amount { font-size:7.5pt; }
+  .cash-page-view .cash-session-panel > .cash-breakdown-panel .cash-breakdown-list { grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; }
 }
 @keyframes toast-check { from { opacity:0; transform:scale(.55); } to { opacity:1; transform:scale(1); } }
