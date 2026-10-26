@@ -168,6 +168,7 @@ En el plan gratuito, Supabase puede pausar proyectos con poca actividad de base 
 
 ## Decisiones
 
+- Refinamiento visual de octubre de 2026: se conserva la identidad ciruela, las tipografías y los colores configurables del salón. La presentación nueva vive en `css/refinement.css`, exclusivamente para pantalla, para preservar las reglas de impresión de caja. Inicio prioriza agendar y consultar la agenda; los accesos a compartir y respaldo conservan sus acciones. El ingreso usa una composición de dos columnas en escritorio y una sola en celular. No requiere migraciones de Supabase.
 - La creación de salones se hace exclusivamente en Supabase Auth; no hay registro público ni credenciales administrativas en el frontend.
 - Las reservas públicas llaman RPCs de `SECURITY DEFINER` con `search_path` vacío. No existe política pública de lectura sobre perfiles, servicios, turnos o solicitudes; la RPC entrega solo la ficha pública y disponibilidad agregada.
 - La cuenta vencida conserva acceso de lectura únicamente a sus propias filas. Todas las escrituras pasan por RLS y requieren cuenta activa y no vencida; cobros, aceptación de reservas y cambios administrativos son transaccionales en RPC.
@@ -202,8 +203,15 @@ La dirección visual del producto es **boutique de belleza moderna**: ciruela y 
 Abrí [guia-ui.html](guia-ui.html) en el navegador para revisar tipografía, paleta, botones, campos y errores, estados, tarjetas, tablas, gráficos, pestañas, paginación, diálogos y esqueletos. Es una página de referencia independiente: no está enlazada desde la navegación del salón ni contiene datos de clientas. La implementación mantiene HTML/CSS/JS sin build ni frameworks pesados.
 
 Decisiones visuales: se conserva el onboarding guiado existente. El inicio comparte un resumen por WhatsApp y muestra accesos contextuales; la agenda del día se puede imprimir. La ficha agrupa Resumen, Turnos, Pagos, Notas y Fotos en pestañas accesibles, y las reservas ofrecen horarios en cuadrícula mientras el formulario mantiene su selector y RPC actuales. Login, recuperación y estados vacíos usan motivos SVG propios. El modo de pantalla puede seguir al sistema o fijarse en claro/oscuro; también hay mostrar/ocultar contraseña, aviso offline y movimiento reducido. Cancelar un turno ofrece Deshacer por unos segundos. No se agregan logros persistentes ni novedades porque requieren estado nuevo; no se puede recuperar un borrado de fotos con las operaciones actuales. Se conservaron las etiquetas de los controles y la ayuda de atajos; el gráfico brinda una lista de valores accesible en vez de depender de tooltips de canvas.
+### Revisión del refinamiento visual (26/10/2026)
+
+Se revisaron con datos ficticios Inicio, Clientas, Agenda, Servicios, Caja, Reportes y Mi salón en seis anchos (320, 360, 430, 768, 1024 y 1440 px), en modo claro y oscuro. No se detectó desborde horizontal de página. Se comprobó la selección de horarios por teclado y que la nueva hoja de estilos no altere las dimensiones del cierre en modo impresión. La revisión visual usa respuestas locales de prueba; no realiza operaciones sobre Supabase.
+
+Al publicar, probar a mano: ingresar y recuperar contraseña, navegar en celular, abrir un formulario desde los accesos rápidos, seleccionar servicios y horario en el enlace público, alternar tema e imprimir un cierre real en A4.
+
 ## Archivos principales
 
+- [`css/refinement.css`](css/refinement.css): ajustes de composición, navegación, formularios, inicio y reservas; modos claro/oscuro y tamaños móviles, sin alterar impresión.
 - [`index.html`](index.html): app móvil de la peluquera.
 - [`admin.html`](admin.html): panel protegido en Postgres para administración.
 - [`reservar.html`](reservar.html): página pública para solicitudes de turnos.
